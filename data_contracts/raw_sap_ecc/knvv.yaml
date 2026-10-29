@@ -1,0 +1,24 @@
+table: raw_sap_ecc.knvv
+layer: raw
+source_system: SAP_ECC
+description: Customer sales area data (SAP table KNVV), including proof-of-delivery relevance.
+grain: One row per client, customer, sales organization, distribution channel, and division.
+primary_key: [mandt, kunnr, vkorg, vtweg, spart]
+domain: MasterData
+subdomain: MasterData/Customer
+sensitivity: internal
+site_key: {column: vkorg, kind: organization}
+columns:
+  - {name: mandt, type: STRING, nullable: false, sap_type: CLNT3, comment: "SAP client."}
+  - {name: kunnr, type: STRING, nullable: false, sap_type: CHAR10, comment: "Customer number."}
+  - {name: vkorg, type: STRING, nullable: false, sap_type: CHAR4, comment: "Sales organization: 1000 = US, 2000 = China."}
+  - {name: vtweg, type: STRING, nullable: false, sap_type: CHAR2, comment: "Distribution channel."}
+  - {name: spart, type: STRING, nullable: false, sap_type: CHAR2, comment: "Division."}
+  - {name: podkz, type: STRING, nullable: false, sap_type: CHAR1, comment: "'X' if deliveries to this customer require proof of delivery (POD)."}
+tests:
+  accepted_values:
+    - {column: vkorg, values: ["1000", "2000"]}
+    - {column: podkz, values: ["", "X"]}
+  relationships:
+    - {columns: [mandt, kunnr], references: raw_sap_ecc.kna1, ref_columns: [mandt, kunnr]}
+access: [ops_analyst_global, site_manager_rr, site_manager_cn]

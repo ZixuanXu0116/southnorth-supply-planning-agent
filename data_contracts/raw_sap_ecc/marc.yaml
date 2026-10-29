@@ -1,0 +1,35 @@
+table: raw_sap_ecc.marc
+layer: raw
+source_system: SAP_ECC
+description: Plant-level material data (SAP table MARC), including MRP settings, tariff code, serial number profile, and country of origin.
+grain: One row per client, material, and plant.
+primary_key: [mandt, matnr, werks]
+domain: MasterData
+subdomain: MasterData/Material
+sensitivity: internal
+site_key: {column: werks, kind: plant}
+columns:
+  - {name: mandt, type: STRING, nullable: false, sap_type: CLNT3, comment: "SAP client."}
+  - {name: matnr, type: STRING, nullable: false, sap_type: CHAR18, comment: "Material number (18-character, zero-padded)."}
+  - {name: werks, type: STRING, nullable: false, sap_type: CHAR4, comment: "Plant code."}
+  - {name: dismm, type: STRING, nullable: false, sap_type: CHAR2, comment: "MRP type: PD = MRP, VB = manual reorder point."}
+  - {name: minbe, type: "DECIMAL(13,3)", nullable: false, sap_type: QUAN13_3, comment: "Reorder point in base unit (used with MRP type VB)."}
+  - {name: eisbe, type: "DECIMAL(13,3)", nullable: false, sap_type: QUAN13_3, comment: "Safety stock in base unit: the minimum of the main warehouse (MIN of the min-max rule); below it the main warehouse pulls from its overflow hub."}
+  - {name: beskz, type: STRING, nullable: false, sap_type: CHAR1, comment: "Procurement type: F = external, E = in-house, X = both."}
+  - {name: plifz, type: "DECIMAL(3,0)", nullable: false, sap_type: DEC3, comment: "Planned delivery time in calendar days."}
+  - {name: stawn, type: STRING, nullable: false, sap_type: CHAR17, comment: "Commodity / tariff code (HTS, digits only). This is not the export control classification (ECCN)."}
+  - {name: sernp, type: STRING, nullable: false, sap_type: CHAR4, comment: "Serial number profile; ZSN1 = serialized, blank = not serialized."}
+  - {name: herkl, type: STRING, nullable: false, sap_type: CHAR3, comment: "Country of origin (ISO alpha-2)."}
+  - {name: lvorm, type: STRING, nullable: false, sap_type: CHAR1, comment: "Deletion flag at plant level."}
+  - {name: maabc, type: STRING, nullable: false, sap_type: CHAR1, comment: "ABC indicator by annual consumption value at the plant: A (top 70 percent of value), B (next 20 percent), C (rest). Used as the criticality class of the planning cost model."}
+  - {name: mabst, type: "DECIMAL(13,3)", nullable: false, sap_type: QUAN13_3, comment: "Maximum stock level of the main warehouse in base unit (the minimum plus about 45 days of demand, at least five units); above it logistics moves stock to the overflow hub. Projected stock above it for eight weeks counts as excess."}
+tests:
+  accepted_values:
+    - {column: maabc, values: [A, B, C]}
+    - {column: werks, values: [US10, CN10]}
+    - {column: dismm, values: [PD, VB]}
+    - {column: sernp, values: ["", ZSN1]}
+  relationships:
+    - {columns: [mandt, matnr], references: raw_sap_ecc.mara, ref_columns: [mandt, matnr]}
+    - {columns: [mandt, werks], references: raw_sap_ecc.t001w, ref_columns: [mandt, werks]}
+access: [ops_analyst_global, site_manager_rr, site_manager_cn, trade_compliance]

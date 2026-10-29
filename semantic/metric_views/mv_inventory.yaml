@@ -1,0 +1,78 @@
+# Unity Catalog metric view. `definition` is deployed as YAML 1.1 to <catalog>.semantic.<name>
+# (`snm-data build`); the other keys are project metadata: the roles that may query it and the
+# knowledge-base documents whose definitions it implements.
+name: mv_inventory
+access: [ops_analyst_global, site_manager_rr, site_manager_cn]
+kb: [metrics/available_stock.md, metrics/days_of_supply.md]
+definition:
+  version: 1.1
+  comment: >-
+    Available stock and days of supply per site and material at the site's issuing storage location,
+    as of the end of a day (nightly snapshot). Always filter as_of_date to one day (the last complete day for
+    "now", or a fiscal period end): measures add up the rows selected. Days of supply = available stock / average
+    daily demand of the manufacturing department (issues to the production supply area) of the trailing 28 days;
+    materials without demand have no days of supply and are
+    counted in materials_without_demand. Filter material_days_of_supply for thresholds (for example < 7).
+  source: "{catalog}.curated.fct_stock_position_daily"
+  dimensions:
+    - name: as_of_date
+      expr: as_of_date
+      comment: "Site-local day the position refers to (end of day); filter to one day."
+    - name: site
+      expr: site
+      comment: "Round Rock, Longgang, or Dongguan."
+    - name: plant
+      expr: plant
+      comment: "Plant: US10 or CN10."
+    - name: storage_location
+      expr: storage_location
+      comment: "Issuing storage location: 1000 (main warehouses) or 3000 (Dongguan overflow hub)."
+    - name: material
+      expr: material
+      comment: "Material number without leading zeros."
+    - name: has_demand
+      expr: has_demand
+      comment: "Customer demand in the trailing 28 days."
+    - name: is_out_of_stock
+      expr: is_out_of_stock
+      comment: "No available stock at the end of the day."
+    - name: material_days_of_supply
+      expr: days_of_supply
+      comment: "Days of supply of the material on that day (NULL without demand); filter it for thresholds."
+    - name: is_fiscal_period_end
+      expr: is_fiscal_period_end
+      comment: "The day is the last day of its fiscal period."
+    - name: fiscal_year
+      expr: fiscal_year
+      comment: "Fiscal year of the day."
+    - name: fiscal_quarter
+      expr: fiscal_quarter
+      comment: "Fiscal quarter (1-4) of the day."
+    - name: fiscal_period
+      expr: fiscal_period
+      comment: "Fiscal period (1-12) of the day."
+  measures:
+    - name: materials
+      expr: COUNT(1)
+      comment: "Materials (rows) selected."
+    - name: materials_with_demand
+      expr: COUNT_IF(has_demand)
+      comment: "Materials with manufacturing demand in the trailing 28 days."
+    - name: materials_without_demand
+      expr: COUNT_IF(NOT has_demand)
+      comment: "Materials without manufacturing demand in the trailing 28 days (no days of supply)."
+    - name: materials_out_of_stock
+      expr: COUNT_IF(is_out_of_stock)
+      comment: "Materials with no available stock."
+    - name: available_qty
+      expr: SUM(available_qty)
+      comment: "Available (unrestricted) stock in base units."
+    - name: avg_daily_demand
+      expr: SUM(demand_28d_qty) / 28.0
+      comment: "Average daily manufacturing demand (issues to the production supply area) over the trailing 28 days, base units."
+    - name: days_of_supply
+      expr: try_divide(SUM(available_qty), SUM(demand_28d_qty) / 28.0)
+      comment: "Days of supply of the selected materials together: available stock / average daily demand."
+    - name: median_days_of_supply
+      expr: percentile(days_of_supply, 0.5)
+      comment: "Median days of supply across the selected materials with demand."

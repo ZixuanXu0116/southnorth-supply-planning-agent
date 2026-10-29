@@ -1,0 +1,349 @@
+{
+  "suite": "seed",
+  "as_of": "2026-09-21",
+  "data_snapshot": {
+    "profile": "small",
+    "generator_version": "0.8.0",
+    "seed": 20260924
+  },
+  "computed_at": "2026-10-17T17:03:57+00:00",
+  "results": {
+    "seed_01": {
+      "primary": {
+        "columns": [
+          "vstel",
+          "on_time_pgi_rate"
+        ],
+        "rows": [
+          [
+            "C100",
+            0.9683
+          ],
+          [
+            "C300",
+            0.9599
+          ],
+          [
+            "U100",
+            0.9231
+          ]
+        ]
+      }
+    },
+    "seed_02": {
+      "primary": {
+        "columns": [
+          "lines_shipped"
+        ],
+        "rows": [
+          [
+            3829
+          ]
+        ]
+      }
+    },
+    "seed_03": {
+      "primary": {
+        "columns": [
+          "lgnum",
+          "median_minutes"
+        ],
+        "rows": [
+          [
+            "DG01",
+            18.225
+          ],
+          [
+            "RR01",
+            47.675
+          ],
+          [
+            "SZ01",
+            11.083333
+          ]
+        ]
+      }
+    },
+    "seed_04": {
+      "primary": {
+        "columns": [
+          "median_minutes"
+        ],
+        "rows": [
+          [
+            129.833333
+          ]
+        ]
+      }
+    },
+    "seed_05": {
+      "primary": {
+        "columns": [
+          "vstel",
+          "otd_rate",
+          "pending_pod"
+        ],
+        "rows": [
+          [
+            "C100",
+            0.7488,
+            4
+          ],
+          [
+            "C300",
+            0.7487,
+            0
+          ],
+          [
+            "U100",
+            0.8462,
+            0
+          ]
+        ]
+      }
+    },
+    "seed_07": {
+      "primary": {
+        "columns": [
+          "material",
+          "shipped_qty_ea"
+        ],
+        "rows": [
+          [
+            "40000758",
+            "6075.000"
+          ],
+          [
+            "40000509",
+            "3200.000"
+          ],
+          [
+            "40001210",
+            "3100.000"
+          ],
+          [
+            "40000753",
+            "3000.000"
+          ],
+          [
+            "40000061",
+            "2800.000"
+          ]
+        ]
+      }
+    },
+    "seed_08": {
+      "primary": {
+        "columns": [
+          "autostore_share"
+        ],
+        "rows": [
+          [
+            "0.5644"
+          ]
+        ]
+      }
+    },
+    "seed_09": {
+      "primary": {
+        "columns": [
+          "vstel",
+          "reversed_deliveries"
+        ],
+        "rows": [
+          [
+            "C100",
+            15
+          ],
+          [
+            "C300",
+            33
+          ],
+          [
+            "U100",
+            3
+          ]
+        ]
+      }
+    },
+    "seed_10": {
+      "primary": {
+        "columns": [
+          "lgtyp",
+          "bins"
+        ],
+        "rows": [
+          [
+            "0010",
+            20
+          ],
+          [
+            "0020",
+            30
+          ],
+          [
+            "0030",
+            20
+          ],
+          [
+            "8000",
+            20
+          ],
+          [
+            "9010",
+            2
+          ],
+          [
+            "9020",
+            4
+          ]
+        ]
+      }
+    },
+    "seed_11": {
+      "primary": {
+        "columns": [
+          "avg_gross_weight_kg"
+        ],
+        "rows": [
+          [
+            "479.814"
+          ]
+        ]
+      }
+    },
+    "seed_12": {
+      "primary": {
+        "columns": [
+          "serialized_materials"
+        ],
+        "rows": [
+          [
+            38
+          ]
+        ]
+      }
+    },
+    "seed_13": {
+      "primary": {
+        "columns": [
+          "werks",
+          "waers",
+          "net_gi_value"
+        ],
+        "rows": [
+          [
+            "CN10",
+            "CNY",
+            "1774321995.46"
+          ],
+          [
+            "US10",
+            "USD",
+            "16874118.77"
+          ]
+        ]
+      },
+      "per_site": {
+        "columns": [
+          "vstel",
+          "waers",
+          "net_gi_value"
+        ],
+        "rows": [
+          [
+            "C100",
+            "CNY",
+            "1511293147.01"
+          ],
+          [
+            "C300",
+            "CNY",
+            "263028848.45"
+          ],
+          [
+            "U100",
+            "USD",
+            "16874118.77"
+          ]
+        ]
+      },
+      "per_currency": {
+        "columns": [
+          "waers",
+          "net_gi_value"
+        ],
+        "rows": [
+          [
+            "CNY",
+            "1774321995.46"
+          ],
+          [
+            "USD",
+            "16874118.77"
+          ]
+        ]
+      }
+    },
+    "seed_14": {
+      "primary": {
+        "columns": [
+          "pick_tasks"
+        ],
+        "rows": [
+          [
+            246
+          ]
+        ]
+      }
+    },
+    "seed_15": {
+      "primary": {
+        "columns": [
+          "pieces_shipped"
+        ],
+        "rows": [
+          [
+            "26043.000"
+          ]
+        ]
+      }
+    },
+    "seed_16": {
+      "primary": {
+        "columns": [
+          "vstel",
+          "deliveries_shipped"
+        ],
+        "rows": [
+          [
+            "C100",
+            13
+          ],
+          [
+            "C300",
+            1
+          ],
+          [
+            "U100",
+            0
+          ]
+        ]
+      }
+    },
+    "seed_20": {
+      "primary": {
+        "columns": [
+          "shift",
+          "pick_tasks"
+        ],
+        "rows": [
+          [
+            "A",
+            780
+          ]
+        ]
+      }
+    }
+  }
+}

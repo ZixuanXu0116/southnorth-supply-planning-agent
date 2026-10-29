@@ -1,0 +1,26 @@
+table: raw_sap_ecc.mkpf
+layer: raw
+source_system: SAP_ECC
+description: Material document header (SAP table MKPF). BUDAT is the site-local posting date; CPUDT/CPUTM are the entry date/time in ECC system time (America/Chicago) for all sites.
+grain: One row per client, material document, and material document year.
+primary_key: [mandt, mblnr, mjahr]
+domain: Inventory
+subdomain: Inventory/Movements
+sensitivity: internal
+columns:
+  - {name: mandt, type: STRING, nullable: false, sap_type: CLNT3, comment: "SAP client."}
+  - {name: mblnr, type: STRING, nullable: false, sap_type: CHAR10, comment: "Material document number."}
+  - {name: mjahr, type: STRING, nullable: false, sap_type: NUMC4, comment: "Material document year; in this dataset the fiscal year of the posting date (fiscal year variant Z5)."}
+  - {name: vgart, type: STRING, nullable: false, sap_type: CHAR2, comment: "Transaction type: WL = goods issue for delivery, WE = goods receipt, WA = other goods issue or transfer posting, WQ = quality inspection release."}
+  - {name: blart, type: STRING, nullable: false, sap_type: CHAR2, comment: "Document type: WL delivery goods issue, WE goods receipt, WA other goods movements."}
+  - {name: bldat, type: STRING, nullable: false, sap_type: DATS, comment: "Document date (YYYYMMDD)."}
+  - {name: budat, type: STRING, nullable: false, sap_type: DATS, comment: "Posting date (YYYYMMDD), site-local."}
+  - {name: cpudt, type: STRING, nullable: false, sap_type: DATS, comment: "Entry date in ECC system time (America/Chicago)."}
+  - {name: cputm, type: STRING, nullable: false, sap_type: TIMS, comment: "Entry time in ECC system time (America/Chicago)."}
+  - {name: usnam, type: STRING, nullable: false, sap_type: CHAR12, comment: "User who posted the document (system users: RFC-EWM postings triggered by EWM, WF-BATCH background jobs, FS-INTERFACE field-service consumption, MIGRATION initial data load)."}
+  - {name: xblnr, type: STRING, nullable: false, sap_type: CHAR16, comment: "Reference document number (delivery number for delivery goods issues, purchase order for goods receipts)."}
+  - {name: le_vbeln, type: STRING, nullable: false, sap_type: CHAR10, comment: "Delivery number for delivery-related goods movements."}
+tests:
+  accepted_values:
+    - {column: vgart, values: [WL, WE, WA, WQ]}
+access: [ops_analyst_global, site_manager_rr, site_manager_cn]

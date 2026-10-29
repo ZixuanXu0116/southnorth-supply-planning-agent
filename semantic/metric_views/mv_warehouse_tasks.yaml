@@ -1,0 +1,93 @@
+# Unity Catalog metric view. `definition` is deployed as YAML 1.1 to <catalog>.semantic.<name>
+# (`snm-data build`); the other keys are project metadata: the roles that may query it and the
+# knowledge-base documents whose definitions it implements.
+name: mv_warehouse_tasks
+access: [ops_analyst_global, site_manager_rr, site_manager_cn]
+restricted_dimensions: [operator]
+kb: [metrics/pick_cycle_time.md]
+definition:
+  version: 1.1
+  comment: >-
+    EWM warehouse tasks by site-local confirmation day: counts and cycle times. Filter task_type (pick,
+    emergency_pick, putaway) or is_pick; the table holds putaways too. Cycle time is creation to confirmation,
+    execution time is start to confirmation (excludes queue time); both cover confirmed tasks only. Exclude
+    is_system_user for people measures; the operator dimension is for site managers (own site) only, never for
+    ranking. AutoStore picks (is_autostore) behave very differently from manual picks.
+  source: "{catalog}.curated.fct_warehouse_task"
+  dimensions:
+    - name: site
+      expr: site
+      comment: "Round Rock, Longgang, or Dongguan."
+    - name: warehouse
+      expr: warehouse
+      comment: "EWM warehouse: RR01 Round Rock, SZ01 Longgang, DG01 Dongguan."
+    - name: task_type
+      expr: task_type
+      comment: "pick, emergency_pick, or putaway."
+    - name: status
+      expr: status
+      comment: "confirmed or cancelled."
+    - name: is_pick
+      expr: is_pick
+      comment: "Pick or emergency pick."
+    - name: is_autostore
+      expr: is_autostore
+      comment: "Picked from the AutoStore (Longgang, source storage type AS01)."
+    - name: is_system_user
+      expr: is_system_user
+      comment: "Confirmed by a system user (WF-BATCH, AS-INTERFACE, RFC-EWM) rather than an operator."
+    - name: operator
+      expr: operator
+      comment: "User who confirmed the task (pseudonymized operator user or system user); people-level roles only."
+    - name: shift
+      expr: shift
+      comment: "Shift of the confirmation time (A, B, C per site); NULL outside shift hours."
+    - name: source_storage_type
+      expr: source_storage_type
+      comment: "Source storage type."
+    - name: destination_storage_type
+      expr: destination_storage_type
+      comment: "Destination storage type."
+    - name: material
+      expr: material
+      comment: "Material number without leading zeros."
+    - name: confirmed_local_date
+      expr: confirmed_local_date
+      comment: "Confirmation day in the warehouse time zone; filter with a range for calendar periods."
+    - name: confirmed_local_hour
+      expr: confirmed_local_hour
+      comment: "Confirmation hour (0-23) in the warehouse time zone."
+    - name: fiscal_year
+      expr: fiscal_year
+      comment: "Fiscal year of the confirmation day."
+    - name: fiscal_quarter
+      expr: fiscal_quarter
+      comment: "Fiscal quarter (1-4) of the confirmation day."
+    - name: fiscal_period
+      expr: fiscal_period
+      comment: "Fiscal period (1-12) of the confirmation day."
+    - name: fiscal_week
+      expr: fiscal_week
+      comment: "Fiscal week (1-53, Monday to Sunday) of the confirmation day."
+  measures:
+    - name: tasks
+      expr: COUNT(1)
+      comment: "Tasks (confirmed and cancelled)."
+    - name: confirmed_tasks
+      expr: COUNT_IF(is_confirmed)
+      comment: "Confirmed tasks."
+    - name: cancelled_tasks
+      expr: COUNT_IF(NOT is_confirmed)
+      comment: "Cancelled tasks."
+    - name: median_cycle_minutes
+      expr: percentile(cycle_minutes, 0.5)
+      comment: "Median minutes from task creation to confirmation (confirmed tasks)."
+    - name: p90_cycle_minutes
+      expr: percentile(cycle_minutes, 0.9)
+      comment: "90th percentile of minutes from task creation to confirmation (confirmed tasks)."
+    - name: median_execution_minutes
+      expr: percentile(execution_minutes, 0.5)
+      comment: "Median minutes from execution start to confirmation (confirmed, started tasks)."
+    - name: p90_execution_minutes
+      expr: percentile(execution_minutes, 0.9)
+      comment: "90th percentile of minutes from execution start to confirmation."

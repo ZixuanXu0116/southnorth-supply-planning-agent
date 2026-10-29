@@ -1,0 +1,27 @@
+[project]
+name = "snm-cases"
+version = "0.0.0"
+description = "MCP case server: the append-only replenishment case store and the agents' case tools."
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    "mcp>=2.2",
+    "openpyxl>=3.1",
+    "pydantic>=2.10",
+    "snm-data",
+    "snm-tools",
+]
+
+[project.scripts]
+snm-cases = "snm_cases.cli:main"
+snm-case-server = "snm_cases.server:main"
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/snm_cases"]
+
+[tool.uv.sources]
+snm-data = { workspace = true }
+snm-tools = { workspace = true }

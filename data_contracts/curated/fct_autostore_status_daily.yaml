@@ -1,0 +1,26 @@
+table: curated.fct_autostore_status_daily
+layer: curated
+materialization: view
+depends_on: [raw_ext.autostore_system_status, raw_ext.autostore_port_status, raw_ext.autostore_bin_presentation, curated.dim_date]
+description: Daily availability of the Longgang AutoStore, for the whole system (subject SYSTEM) and for each port. Stop and closure intervals are clipped to the day (Longgang local time), so availability over any range of days is the sum of available minutes over the sum of minutes in the days. Days run from the first logged interval to the controller data cut-off (latest bin presentation); the cut-off day is partial.
+grain: One row per calendar day and subject (the system or one port).
+primary_key: [subject, calendar_date]
+domain: Automation
+subdomain: Automation/AutoStore
+sensitivity: internal
+site_scope: CN10
+columns:
+  - {name: subject, type: STRING, nullable: false, comment: "SYSTEM for the whole AutoStore, or a port identifier (AS-PORT-01 to AS-PORT-12)."}
+  - {name: subject_type, type: STRING, nullable: false, comment: "system or port."}
+  - {name: calendar_date, type: DATE, nullable: false, comment: "Day in Longgang local time."}
+  - {name: minutes_in_day, type: DOUBLE, nullable: false, comment: "Minutes of the day covered by the data (1440 except on the cut-off day)."}
+  - {name: available_minutes, type: DOUBLE, nullable: false, comment: "Minutes the system was running, or the port was open."}
+  - {name: downtime_minutes, type: DOUBLE, nullable: false, comment: "Minutes the system was stopped, or the port was closed."}
+  - {name: maintenance_minutes, type: DOUBLE, nullable: false, comment: "Port closure minutes for planned maintenance (ports only)."}
+  - {name: fault_minutes, type: DOUBLE, nullable: false, comment: "Port closure minutes for faults (ports only)."}
+  - {name: downtime_events, type: BIGINT, nullable: false, comment: "Stops or closures that overlap the day."}
+  - {name: fiscal_year, type: INT, comment: "Fiscal year of the day."}
+  - {name: fiscal_quarter, type: INT, comment: "Fiscal quarter of the day."}
+  - {name: fiscal_period, type: INT, comment: "Fiscal period of the day."}
+  - {name: fiscal_week, type: INT, comment: "Fiscal week of the day."}
+access: []

@@ -1,0 +1,29 @@
+# Node
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Generated data and run artifacts
+out/
+runs/
+.eval/
+*.parquet
+
+# Secrets and local config
+.secrets/
+.env
+.env.*
+!.env.example
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

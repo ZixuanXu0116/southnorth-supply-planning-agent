@@ -1,0 +1,41 @@
+table: curated.fct_warehouse_task
+layer: curated
+materialization: view
+depends_on: [raw_sap_ewm.scwm_ordim_c, raw_sap_ewm.sapapo_matkey, curated.dim_date]
+description: EWM warehouse tasks (picks, emergency picks, putaways; confirmed or cancelled) with UTC timestamps, the site-local confirmation day, hour, and shift, the product, and the cycle and execution times of confirmed tasks. For cancelled tasks confirmed_at holds the cancellation time. operator is the confirming user (masked to NULL for roles without people-level access, system users excepted); is_system_user marks tasks confirmed by batch jobs and interfaces.
+grain: One row per warehouse, warehouse task, and task item.
+primary_key: [warehouse, task_number, task_item]
+domain: WarehouseOperations
+subdomain: WarehouseOperations/Tasks
+sensitivity: internal
+columns:
+  - {name: warehouse, type: STRING, nullable: false, comment: "EWM warehouse: RR01 Round Rock, SZ01 Longgang, DG01 Dongguan."}
+  - {name: site, type: STRING, nullable: false, comment: "Site of the warehouse: Round Rock, Longgang, or Dongguan."}
+  - {name: task_number, type: STRING, nullable: false, comment: "Warehouse task number."}
+  - {name: task_item, type: STRING, nullable: false, comment: "Warehouse task item."}
+  - {name: task_type, type: STRING, nullable: false, comment: "pick (process type 2010), emergency_pick (2020), or putaway (1011)."}
+  - {name: status, type: STRING, nullable: false, comment: "confirmed or cancelled."}
+  - {name: is_confirmed, type: BOOLEAN, nullable: false, comment: "Task confirmed (not cancelled)."}
+  - {name: is_pick, type: BOOLEAN, nullable: false, comment: "Pick or emergency pick (stock removal)."}
+  - {name: is_autostore, type: BOOLEAN, nullable: false, comment: "Picked from the AutoStore (source storage type AS01, Longgang only)."}
+  - {name: is_system_user, type: BOOLEAN, nullable: false, comment: "Confirmed by a system user (WF-BATCH, AS-INTERFACE, RFC-EWM) rather than an operator; exclude for people measures."}
+  - {name: operator, type: STRING, sensitivity: restricted, comment: "User who confirmed or cancelled the task (pseudonymized operator user or system user); NULL for roles without people-level access, system users excepted."}
+  - {name: material, type: STRING, comment: "Material number without leading zeros."}
+  - {name: source_storage_type, type: STRING, nullable: false, comment: "Source storage type (AS01 = AutoStore)."}
+  - {name: destination_storage_type, type: STRING, nullable: false, comment: "Destination storage type."}
+  - {name: wave, type: STRING, nullable: false, comment: "Wave the task belongs to; 0000000000 for putaway tasks."}
+  - {name: warehouse_order, type: STRING, nullable: false, comment: "Warehouse order."}
+  - {name: resource, type: STRING, nullable: false, comment: "Resource used (RF device or AutoStore port)."}
+  - {name: created_at, type: TIMESTAMP, nullable: false, comment: "Task creation (UTC)."}
+  - {name: started_at, type: TIMESTAMP, comment: "Execution start (UTC); NULL if never started."}
+  - {name: confirmed_at, type: TIMESTAMP, nullable: false, comment: "Confirmation (UTC); cancellation time for cancelled tasks."}
+  - {name: confirmed_local_date, type: DATE, nullable: false, comment: "Confirmation day in the warehouse time zone."}
+  - {name: confirmed_local_hour, type: INT, nullable: false, comment: "Confirmation hour (0-23) in the warehouse time zone."}
+  - {name: shift, type: STRING, comment: "Shift of the confirmation time: Round Rock A 06-14, B 14-22; Longgang A 07-15, B 15-23, C 23-07; Dongguan A 07-15, B 15-23; NULL outside shift hours."}
+  - {name: cycle_minutes, type: DOUBLE, comment: "Minutes from creation to confirmation (confirmed tasks)."}
+  - {name: execution_minutes, type: DOUBLE, comment: "Minutes from execution start to confirmation (confirmed tasks that were started); excludes queue time."}
+  - {name: fiscal_year, type: INT, comment: "Fiscal year of the confirmation day."}
+  - {name: fiscal_quarter, type: INT, comment: "Fiscal quarter of the confirmation day."}
+  - {name: fiscal_period, type: INT, comment: "Fiscal period of the confirmation day."}
+  - {name: fiscal_week, type: INT, comment: "Fiscal week of the confirmation day."}
+access: []

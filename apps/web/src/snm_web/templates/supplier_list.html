@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Requests · {{ company }}{% endblock %}
+{% block area %}supplier portal{% endblock %}
+{% block content %}
+<h1>Requests from SouthNorth Solutions to {{ company }}</h1>
+<div class="card">
+<table>
+  <tr><th>Request</th><th>Status</th><th>Type</th><th>Material</th><th class="num">Quantity</th><th>Needed by</th><th>Sent</th></tr>
+  {% for r in requests %}
+  <tr><td><a href="/supplier/{{ r.case_id }}">{{ r.case_id }}</a></td><td>{{ r.status }}</td><td>{{ r.request_type }}</td>
+      <td>{{ r.material }} · {{ r.description }}</td><td class="num">{{ r.quantity|qty }}</td><td>{{ r.needed_date }}</td><td>{{ r.sent_at[:10] }}</td></tr>
+  {% else %}<tr><td colspan="7" class="muted">No requests yet.</td></tr>{% endfor %}
+</table>
+</div>
+{% endblock %}

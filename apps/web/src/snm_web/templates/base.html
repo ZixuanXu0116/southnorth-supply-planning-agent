@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}SouthNorth Solutions{% endblock %}</title>
+<style>
+  :root { --ink: #1d2733; --muted: #5d6b7a; --line: #d9dee5; --bg: #f6f7f9; --card: #fff; --accent: #1f5f99;
+          --ok: #1e7b4a; --warn: #a55a00; --bad: #b3261e; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--ink); background: var(--bg); }
+  header { background: var(--ink); color: #fff; padding: 10px 20px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+  header a { color: #fff; text-decoration: none; }
+  header .brand { font-weight: 600; }
+  header .role { margin-left: auto; opacity: .9; }
+  .mode { background: #ffd666; color: #3a2a00; border-radius: 4px; padding: 1px 8px; font-size: 12px; }
+  main { max-width: 1180px; margin: 0 auto; padding: 16px 20px 40px; }
+  h1 { font-size: 20px; margin: 8px 0 12px; } h2 { font-size: 16px; margin: 0 0 10px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; margin: 0 0 14px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px 16px; }
+  .grid div span { display: block; color: var(--muted); font-size: 12px; }
+  table { width: 100%; border-collapse: collapse; } th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; } td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .notice, .error { border-radius: 6px; padding: 8px 12px; margin: 0 0 12px; }
+  .notice { background: #e8f4ec; color: var(--ok); } .error { background: #fbeaea; color: var(--bad); }
+  .tag { display: inline-block; border-radius: 10px; padding: 0 8px; font-size: 12px; background: #e9eef4; }
+  .tag.yes { background: #e8f4ec; color: var(--ok); } .tag.no { background: #fbeaea; color: var(--bad); }
+  .tag.rec { background: #e3edf8; color: var(--accent); font-weight: 600; }
+  .tag.warn { background: #fdf3e1; color: var(--warn); }
+  form.inline { display: inline; } label { display: block; color: var(--muted); font-size: 12px; margin: 6px 0 2px; }
+  input, select, textarea { font: inherit; padding: 5px 7px; border: 1px solid var(--line); border-radius: 4px; width: 100%; background: #fff; }
+  textarea { min-height: 80px; } .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0 12px; }
+  .checks label { display: inline-block; margin-right: 12px; color: var(--ink); } .checks input { width: auto; }
+  button { font: inherit; background: var(--accent); color: #fff; border: 0; border-radius: 4px; padding: 6px 14px; cursor: pointer; margin-top: 8px; }
+  button.secondary { background: #e9eef4; color: var(--ink); } button.danger { background: var(--bad); }
+  .muted { color: var(--muted); } .msg { border-left: 3px solid var(--line); padding: 4px 10px; margin: 6px 0; white-space: pre-wrap; }
+  .msg.in { border-color: var(--warn); } .msg.out { border-color: var(--accent); }
+  a { color: var(--accent); } .filters a { margin-right: 10px; } .filters a.on { font-weight: 700; text-decoration: none; }
+  td.nowrap { white-space: nowrap; } tr.chosen td { background: #f2f7fc; } .rationale { white-space: pre-wrap; line-height: 1.6; max-width: 86ch;
+    margin: 12px 0 0; padding: 10px 14px; border-left: 3px solid var(--accent); background: #fafbfc; }
+  .card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  details summary { cursor: pointer; color: var(--accent); } details[open] > summary { margin-bottom: 8px; }
+  details + details { margin-top: 8px; } .note { margin: 8px 0; max-width: 110ch; }
+  .sub { display: block; font-size: 12px; color: var(--muted); } tr.ref td { color: var(--muted); }
+  tr.ref td b { color: var(--ink); font-weight: 500; } td.good, tr.ref td.good { color: var(--ok); font-weight: 600; }
+  table.options td { padding-top: 7px; padding-bottom: 7px; }
+</style>
+</head>
+<body>
+<header>
+  <a class="brand" href="/">SouthNorth Solutions · {% block area %}cases{% endblock %}</a>
+  {% if mode == "local" %}<span class="mode">local role play</span>{% endif %}
+  <span class="role">{{ role_label }} · <a href="/role">switch role</a></span>
+</header>
+<main>
+  {% if notice %}<div class="notice">{{ notice }}</div>{% endif %}
+  {% if error %}<div class="error">{{ error }}</div>{% endif %}
+  {% block content %}{% endblock %}
+</main>
+</body>
+</html>

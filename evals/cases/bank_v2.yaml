@@ -1,0 +1,474 @@
+# Retired on 2026-10-17 (decision record 003: no external customers, no export control): c115.
+# Evaluation bank v2: bank v1 plus 16 harder cases (c101-c116). Owner review pending.
+#
+# The new cases target rules that live only in the knowledge base (governed metric definitions, site
+# shift times, hub demand, POD coverage), which the table and column documentation does not explain,
+# and multi-step questions that chain a governed metric into a follow-up query. Same conventions as
+# seed.yaml; about 40 % of the new cases are in the locked test split.
+
+suite: bank_v2
+as_of: "2026-09-21"  # Monday, first day of FY2026 P12; ECC extracted 2026-09-21 05:00 UTC
+data_snapshot: {profile: small, generator_version: 0.8.0, seed: 20260924}
+includes: [bank_v1]
+
+cases:
+  # ---------------------------------------------------------------- traps: knowledge-base-only rules
+  - id: c101
+    question: What is the on-time PGI rate at each site for the current fiscal quarter so far?
+    role: ops_analyst_global
+    category: trap
+    expected_behavior: answer
+    acceptable_behaviors: [answer, answer_with_assumption]
+    trap_tags: [data_freshness, fiscal_calendar, metric_definition]
+    required_kb_docs: [metrics/on_time_pgi_rate.md, concepts/fiscal_calendar.md, concepts/data_freshness.md]
+    required_tables: [raw_sap_ecc.likp, raw_sap_ecc.t009b]
+    notes: >-
+      FY2026 Q4 started 2026-07-27. Deliveries due before the cut-off day only (today, 2026-09-21, is
+      excluded: most of today's deliveries are still open and would count as late); due-based, so open
+      overdue deliveries count as late.
+    reference_sql: |
+      SELECT vstel,
+             ROUND(SUM(CASE WHEN wadat_ist <> '00000000' AND wadat_ist <= wadat THEN 1 ELSE 0 END)
+                   / COUNT(*), 4) AS on_time_pgi_rate
+      FROM raw_sap_ecc.likp
+      WHERE wadat BETWEEN '20260727' AND '20260920'
+      GROUP BY vstel
+    answer:
+      keys: [vstel]
+      values: [{column: on_time_pgi_rate, abs: 0.002}]
+
+  - id: c102
+    split: test
+    question: How many Longgang materials have more than 180 days of supply?
+    role: ops_analyst_global
+    category: trap
+    expected_behavior: answer
+    acceptable_behaviors: [answer, answer_with_assumption]
+    trap_tags: [metric_definition, zero_demand]
+    required_kb_docs: [metrics/days_of_supply.md, metrics/available_stock.md]
+    required_tables: [raw_sap_ecc.mseg, raw_ext.inventory_snapshot_daily, raw_sap_ecc.mard]
+    notes: >-
+      Governed days of supply: available stock / trailing 28-day manufacturing demand. Materials without
+      demand have undefined days of supply and are reported separately, not counted as infinite.
+      As of the last complete day (snapshot 2026-09-20); current MARD stock is also accepted.
+    reference_sql: |
+      WITH demand AS (
+        SELECT matnr, SUM(CASE WHEN bwart = '311' THEN menge ELSE -menge END) / 28.0 AS avg_daily_demand
+        FROM raw_sap_ecc.mseg
+        WHERE werks = 'CN10' AND lgort = '1000' AND umlgo = '2100'
+          AND ((bwart = '311' AND shkzg = 'H') OR (bwart = '312' AND shkzg = 'S'))
+          AND budat_mkpf BETWEEN '20260824' AND '20260920'
+        GROUP BY matnr
+      ),
+      stock AS (
+        SELECT matnr, quantity
+        FROM raw_ext.inventory_snapshot_daily
+        WHERE snapshot_date = DATE'2026-09-20' AND werks = 'CN10' AND lgort = '1000'
+          AND stock_category = 'UNRESTRICTED'
+      )
+      SELECT COUNT(*) AS materials_over_180_days
+      FROM demand d LEFT JOIN stock s ON s.matnr = d.matnr
+      WHERE d.avg_daily_demand > 0 AND COALESCE(s.quantity, 0) / d.avg_daily_demand > 180
+    answer:
+      values: [{column: materials_over_180_days, abs: 0}]
+    answer_variants:
+      - name: current_stock
+        reference_sql: |
+          WITH demand AS (
+            SELECT matnr, SUM(CASE WHEN bwart = '311' THEN menge ELSE -menge END) / 28.0 AS avg_daily_demand
+            FROM raw_sap_ecc.mseg
+            WHERE werks = 'CN10' AND lgort = '1000' AND umlgo = '2100'
+          AND ((bwart = '311' AND shkzg = 'H') OR (bwart = '312' AND shkzg = 'S'))
+              AND budat_mkpf BETWEEN '20260824' AND '20260920'
+            GROUP BY matnr
+          )
+          SELECT COUNT(*) AS materials_over_180_days
+          FROM demand d
+          LEFT JOIN raw_sap_ecc.mard m ON m.matnr = d.matnr AND m.werks = 'CN10' AND m.lgort = '1000'
+          WHERE d.avg_daily_demand > 0 AND COALESCE(m.labst, 0) / d.avg_daily_demand > 180
+        answer:
+          values: [{column: materials_over_180_days, abs: 0}]
+
+  - id: c103
+    question: How many Round Rock materials will run out within two weeks at the current demand rate?
+    role: ops_analyst_global
+    category: trap
+    expected_behavior: answer
+    acceptable_behaviors: [answer, answer_with_assumption]
+    trap_tags: [metric_definition, satellites]
+    required_kb_docs: [metrics/days_of_supply.md, metrics/available_stock.md, sites/round_rock.md]
+    required_tables: [raw_sap_ecc.mseg, raw_ext.inventory_snapshot_daily, raw_sap_ecc.mard]
+    notes: >-
+      Days of supply below 14 at the main warehouse (US10/1000; overflow-hub stock does not count),
+      trailing 28-day manufacturing demand, materials with demand only.
+    reference_sql: |
+      WITH demand AS (
+        SELECT matnr, SUM(CASE WHEN bwart = '311' THEN menge ELSE -menge END) / 28.0 AS avg_daily_demand
+        FROM raw_sap_ecc.mseg
+        WHERE werks = 'US10' AND lgort = '1000' AND umlgo = '2100'
+          AND ((bwart = '311' AND shkzg = 'H') OR (bwart = '312' AND shkzg = 'S'))
+          AND budat_mkpf BETWEEN '20260824' AND '20260920'
+        GROUP BY matnr
+      ),
+      stock AS (
+        SELECT matnr, quantity
+        FROM raw_ext.inventory_snapshot_daily
+        WHERE snapshot_date = DATE'2026-09-20' AND werks = 'US10' AND lgort = '1000'
+          AND stock_category = 'UNRESTRICTED'
+      )
+      SELECT COUNT(*) AS materials_below_14_days
+      FROM demand d LEFT JOIN stock s ON s.matnr = d.matnr
+      WHERE d.avg_daily_demand > 0 AND COALESCE(s.quantity, 0) / d.avg_daily_demand < 14
+    answer:
+      values: [{column: materials_below_14_days, abs: 0}]
+    answer_variants:
+      - name: current_stock
+        reference_sql: |
+          WITH demand AS (
+            SELECT matnr, SUM(CASE WHEN bwart = '311' THEN menge ELSE -menge END) / 28.0 AS avg_daily_demand
+            FROM raw_sap_ecc.mseg
+            WHERE werks = 'US10' AND lgort = '1000' AND umlgo = '2100'
+          AND ((bwart = '311' AND shkzg = 'H') OR (bwart = '312' AND shkzg = 'S'))
+              AND budat_mkpf BETWEEN '20260824' AND '20260920'
+            GROUP BY matnr
+          )
+          SELECT COUNT(*) AS materials_below_14_days
+          FROM demand d
+          LEFT JOIN raw_sap_ecc.mard m ON m.matnr = d.matnr AND m.werks = 'US10' AND m.lgort = '1000'
+          WHERE d.avg_daily_demand > 0 AND COALESCE(m.labst, 0) / d.avg_daily_demand < 14
+        answer:
+          values: [{column: materials_below_14_days, abs: 0}]
+
+  - id: c104
+    split: test
+    question: How many of Seoin Flow Control's purchase orders were delivered late in fiscal Q3 of FY2026?
+    role: ops_analyst_global
+    category: trap
+    expected_behavior: answer
+    acceptable_behaviors: [answer, answer_with_assumption]
+    trap_tags: [metric_definition, expedited_orders]
+    required_kb_docs: [metrics/supplier_on_time_delivery.md, guides/procurement_and_stock.md]
+    required_tables: [raw_sap_ecc.ekko, raw_sap_ecc.eket, raw_sap_ecc.mseg, raw_sap_ecc.lfa1]
+    notes: >-
+      Governed definition: standard orders (NB), first receipt in the quarter, late = first receipt more
+      than one day after EINDT. Without the grace day the count is much higher.
+    reference_sql: |
+      WITH first_gr AS (
+        SELECT ebeln, MIN(budat_mkpf) AS first_receipt FROM raw_sap_ecc.mseg WHERE bwart = '101' GROUP BY ebeln
+      )
+      SELECT SUM(CASE WHEN g.first_receipt > date_format(date_add(to_date(e.eindt, 'yyyyMMdd'), 1), 'yyyyMMdd')
+                      THEN 1 ELSE 0 END) AS late_orders
+      FROM raw_sap_ecc.ekko k
+      JOIN raw_sap_ecc.eket e ON e.ebeln = k.ebeln
+      JOIN first_gr g ON g.ebeln = k.ebeln
+      JOIN raw_sap_ecc.lfa1 l ON l.lifnr = k.lifnr
+      WHERE k.bsart = 'NB' AND l.name1 = 'Seoin Flow Control'
+        AND g.first_receipt BETWEEN '20260427' AND '20260726'
+    answer:
+      values: [{column: late_orders, abs: 0}]
+
+  - id: c108
+    split: test
+    question: How many pick tasks were confirmed during shift A at Dongguan in fiscal period 11 of FY2026?
+    role: ops_analyst_global
+    category: trap
+    expected_behavior: answer
+    acceptable_behaviors: [answer, answer_with_assumption]
+    trap_tags: [site_calendar, people_analytics, timezone]
+    required_kb_docs: [sites/dongguan.md, metrics/pick_cycle_time.md, policies/people_analytics.md]
+    required_tables: [raw_sap_ewm.scwm_ordim_c]
+    notes: >-
+      Shift A at Dongguan = 07:00-15:00 local (site document); this role cannot read the roster, so the
+      shift comes from the local confirmation hour.
+    reference_sql: |
+      SELECT COUNT(*) AS pick_tasks
+      FROM raw_sap_ewm.scwm_ordim_c
+      WHERE lgnum = 'DG01' AND tostat = 'C' AND procty IN ('2010', '2020')
+        AND substr(cast(confirmed_at_wh AS STRING), 1, 8) BETWEEN '20260824' AND '20260920'
+        AND substr(cast(confirmed_at_wh AS STRING), 9, 2) BETWEEN '07' AND '14'
+    answer:
+      values: [{column: pick_tasks, abs: 0}]
+
+  - id: c109
+    question: >-
+      How much outbound demand did the Longgang main warehouse have in fiscal period 11 of FY2026, including the
+      replenishment of Dongguan?
+    role: ops_analyst_global
+    category: trap
+    expected_behavior: answer
+    acceptable_behaviors: [answer, answer_with_assumption]
+    trap_tags: [transfers_not_demand, transfer_double_count]
+    required_kb_docs: [concepts/internal_transfers.md, metrics/days_of_supply.md, sites/longgang.md]
+    required_tables: [raw_sap_ecc.mseg]
+    notes: >-
+      Main-warehouse demand = issues to manufacturing at CN10/1000 (311 to 2100 net of 312) plus transfers out to Dongguan
+      (313 issuing items only; 315 and the 313 receiving item are the same goods). Customer demand from
+      delivery quantities instead of goods-issue postings differs by well under 0.2 %, which passes.
+    reference_sql: |
+      SELECT SUM(CASE WHEN bwart = '311' THEN menge WHEN bwart = '312' THEN -menge ELSE 0 END) AS manufacturing_qty,
+             SUM(CASE WHEN bwart = '313' AND shkzg = 'H' THEN menge ELSE 0 END) AS transfer_qty,
+             SUM(CASE WHEN bwart = '311' THEN menge WHEN bwart = '312' THEN -menge
+                      WHEN bwart = '313' AND shkzg = 'H' THEN menge ELSE 0 END) AS hub_demand_qty
+      FROM raw_sap_ecc.mseg
+      WHERE werks = 'CN10' AND lgort = '1000'
+        AND ((bwart = '311' AND shkzg = 'H' AND umlgo = '2100') OR (bwart = '312' AND shkzg = 'S' AND umlgo = '2100') OR bwart = '313')
+        AND budat_mkpf BETWEEN '20260824' AND '20260920'
+    answer:
+      values: [{column: hub_demand_qty, rel: 0.002}]
+
+  - id: c110
+    question: What was the median pick cycle time for each shift at Dongguan in fiscal period 11 of FY2026?
+    role: ops_analyst_global
+    category: trap
+    expected_behavior: answer
+    acceptable_behaviors: [answer, answer_with_assumption]
+    trap_tags: [site_calendar, metric_definition]
+    required_kb_docs: [sites/dongguan.md, metrics/pick_cycle_time.md]
+    required_tables: [raw_sap_ewm.scwm_ordim_c]
+    notes: Shifts A 07:00-15:00 and B 15:00-23:00 local by confirmation time; creation to confirmation.
+    reference_sql: |
+      SELECT CASE WHEN substr(cast(confirmed_at_wh AS STRING), 9, 2) BETWEEN '07' AND '14' THEN 'A' ELSE 'B' END
+               AS shift,
+             percentile((unix_timestamp(to_timestamp(cast(confirmed_at AS STRING), 'yyyyMMddHHmmss'))
+                         - unix_timestamp(to_timestamp(cast(created_at AS STRING), 'yyyyMMddHHmmss'))) / 60.0,
+                        0.5) AS median_minutes
+      FROM raw_sap_ewm.scwm_ordim_c
+      WHERE lgnum = 'DG01' AND tostat = 'C' AND procty IN ('2010', '2020')
+        AND substr(cast(confirmed_at_wh AS STRING), 1, 8) BETWEEN '20260824' AND '20260920'
+        AND substr(cast(confirmed_at_wh AS STRING), 9, 2) BETWEEN '07' AND '22'
+      GROUP BY 1
+    answer:
+      keys: [shift]
+      values: [{column: median_minutes, rel: 0.03, unit: minutes}]
+
+  - id: c112
+    question: What was the on-time PGI rate at each site last week?
+    role: ops_analyst_global
+    category: trap
+    expected_behavior: answer
+    acceptable_behaviors: [answer, answer_with_assumption]
+    trap_tags: [fiscal_calendar, metric_definition]
+    required_kb_docs: [metrics/on_time_pgi_rate.md, concepts/fiscal_calendar.md]
+    required_tables: [raw_sap_ecc.likp, raw_sap_ecc.t009b]
+    notes: Last full fiscal week = Monday 2026-09-14 to Sunday 2026-09-20 (fiscal weeks start on Monday); due-based.
+    reference_sql: |
+      SELECT vstel,
+             ROUND(SUM(CASE WHEN wadat_ist <> '00000000' AND wadat_ist <= wadat THEN 1 ELSE 0 END)
+                   / COUNT(*), 4) AS on_time_pgi_rate
+      FROM raw_sap_ecc.likp
+      WHERE wadat BETWEEN '20260914' AND '20260920'
+      GROUP BY vstel
+    answer:
+      keys: [vstel]
+      values: [{column: on_time_pgi_rate, abs: 0.002}]
+
+  - id: c113
+    split: test
+    question: How did Round Rock's available stock change during fiscal period 11 of FY2026?
+    role: ops_analyst_global
+    category: trap
+    expected_behavior: answer
+    acceptable_behaviors: [answer, answer_with_assumption]
+    trap_tags: [historical_stock, satellites, metric_definition]
+    required_kb_docs: [metrics/available_stock.md, concepts/stock_types.md]
+    required_tables: [raw_ext.inventory_snapshot_daily]
+    notes: >-
+      Available stock = unrestricted at US10/1000 only. Start = end of 2026-08-23 (last day of P10),
+      end = end of 2026-09-20.
+    reference_sql: |
+      SELECT SUM(CASE WHEN snapshot_date = DATE'2026-08-23' THEN quantity ELSE 0 END) AS start_qty,
+             SUM(CASE WHEN snapshot_date = DATE'2026-09-20' THEN quantity ELSE 0 END) AS end_qty
+      FROM raw_ext.inventory_snapshot_daily
+      WHERE werks = 'US10' AND lgort = '1000' AND stock_category = 'UNRESTRICTED'
+        AND snapshot_date IN (DATE'2026-08-23', DATE'2026-09-20')
+    answer:
+      values: [{column: start_qty, abs: 0}, {column: end_qty, abs: 0}]
+
+  - id: c114
+    question: On how many days during fiscal period 11 of FY2026 did Dongguan have no available stock of material 40001742?
+    role: ops_analyst_global
+    category: trap
+    expected_behavior: answer
+    trap_tags: [snapshot_zero_rows, shared_plant]
+    required_kb_docs: [concepts/stock_types.md, metrics/available_stock.md]
+    required_tables: [raw_ext.inventory_snapshot_daily]
+    notes: Days without a snapshot row count as zero stock (calendar anti-join), 2026-08-24 to 2026-09-20.
+    reference_sql: |
+      WITH days AS (SELECT explode(sequence(DATE'2026-08-24', DATE'2026-09-20')) AS d)
+      SELECT COUNT(*) AS days_out_of_stock
+      FROM days
+      LEFT ANTI JOIN raw_ext.inventory_snapshot_daily s
+        ON s.snapshot_date = days.d AND s.werks = 'CN10' AND s.lgort = '3000'
+       AND ltrim('0', s.matnr) = '40001742' AND s.stock_category = 'UNRESTRICTED'
+    answer:
+      values: [{column: days_out_of_stock, abs: 0}]
+
+  - id: c116
+    question: What was the median days of supply for Round Rock materials at the end of fiscal period 10 of FY2026?
+    role: ops_analyst_global
+    category: trap
+    expected_behavior: answer
+    acceptable_behaviors: [answer, answer_with_assumption]
+    trap_tags: [historical_stock, metric_definition]
+    required_kb_docs: [metrics/days_of_supply.md, metrics/available_stock.md]
+    required_tables: [raw_sap_ecc.mseg, raw_ext.inventory_snapshot_daily]
+    notes: As of 2026-08-23 (snapshot of that day, demand 2026-07-27 to 2026-08-23); materials with demand only.
+    reference_sql: |
+      WITH demand AS (
+        SELECT matnr, SUM(CASE WHEN bwart = '311' THEN menge ELSE -menge END) / 28.0 AS avg_daily_demand
+        FROM raw_sap_ecc.mseg
+        WHERE werks = 'US10' AND lgort = '1000' AND umlgo = '2100'
+          AND ((bwart = '311' AND shkzg = 'H') OR (bwart = '312' AND shkzg = 'S'))
+          AND budat_mkpf BETWEEN '20260727' AND '20260823'
+        GROUP BY matnr
+      ),
+      stock AS (
+        SELECT matnr, quantity
+        FROM raw_ext.inventory_snapshot_daily
+        WHERE snapshot_date = DATE'2026-08-23' AND werks = 'US10' AND lgort = '1000'
+          AND stock_category = 'UNRESTRICTED'
+      )
+      SELECT percentile(COALESCE(s.quantity, 0) / d.avg_daily_demand, 0.5) AS median_days_of_supply
+      FROM demand d LEFT JOIN stock s ON s.matnr = d.matnr
+      WHERE d.avg_daily_demand > 0
+    answer:
+      values: [{column: median_days_of_supply, rel: 0.05, unit: days}]
+
+  # ---------------------------------------------------------------- multi-step: a governed metric feeds a follow-up
+  - id: c105
+    question: >-
+      For the supplier with the lowest on-time delivery rate so far in fiscal year 2026, how many purchase
+      order schedule lines are still open, and how many of those are overdue?
+    role: ops_analyst_global
+    category: multi_step
+    expected_behavior: answer
+    acceptable_behaviors: [answer, answer_with_assumption]
+    trap_tags: [metric_definition]
+    required_kb_docs: [metrics/supplier_on_time_delivery.md, guides/procurement_and_stock.md]
+    required_tables: [raw_sap_ecc.ekko, raw_sap_ecc.eket, raw_sap_ecc.mseg, raw_sap_ecc.lfa1]
+    notes: Step 1 = governed supplier OTD per vendor (Hoshino RF Devices); step 2 = open (WEMNG < MENGE) and overdue (EINDT before today).
+    reference_sql: |
+      WITH first_gr AS (
+        SELECT ebeln, MIN(budat_mkpf) AS first_receipt FROM raw_sap_ecc.mseg WHERE bwart = '101' GROUP BY ebeln
+      ),
+      worst AS (
+        SELECT k.lifnr
+        FROM raw_sap_ecc.ekko k
+        JOIN raw_sap_ecc.eket e ON e.ebeln = k.ebeln
+        JOIN first_gr g ON g.ebeln = k.ebeln
+        WHERE k.bsart = 'NB' AND g.first_receipt >= '20251027'
+        GROUP BY k.lifnr
+        ORDER BY AVG(CASE WHEN g.first_receipt <= date_format(date_add(to_date(e.eindt, 'yyyyMMdd'), 1), 'yyyyMMdd')
+                          THEN 1.0 ELSE 0.0 END)
+        LIMIT 1
+      )
+      SELECT l.name1,
+             SUM(CASE WHEN e.wemng < e.menge THEN 1 ELSE 0 END) AS open_lines,
+             SUM(CASE WHEN e.wemng < e.menge AND e.eindt < '20260921' THEN 1 ELSE 0 END) AS overdue_lines
+      FROM worst w
+      JOIN raw_sap_ecc.lfa1 l ON l.lifnr = w.lifnr
+      JOIN raw_sap_ecc.ekko k ON k.lifnr = w.lifnr
+      JOIN raw_sap_ecc.eket e ON e.ebeln = k.ebeln
+      GROUP BY l.name1
+    answer:
+      keys: [name1]
+      values: [{column: open_lines, abs: 0}, {column: overdue_lines, abs: 0}]
+
+  - id: c106
+    split: test
+    question: >-
+      Which material needed the most emergency transfers to Dongguan so far in fiscal year 2026, and how
+      many days of supply does Dongguan have of it at the end of 2026-09-20?
+    role: ops_analyst_global
+    category: multi_step
+    expected_behavior: answer
+    acceptable_behaviors: [answer, answer_with_assumption]
+    trap_tags: [system_users, transfer_double_count, metric_definition]
+    required_kb_docs: [concepts/internal_transfers.md, metrics/days_of_supply.md, sites/dongguan.md]
+    required_tables: [raw_sap_ecc.mkpf, raw_sap_ecc.mseg, raw_ext.inventory_snapshot_daily]
+    notes: Step 1 = 313 documents posted by RFC-EWM per material (40000360, 7 transfers); step 2 = governed days of supply at 3000.
+    reference_sql: |
+      WITH top_material AS (
+        SELECT s.matnr, COUNT(DISTINCT m.mblnr) AS emergency_transfers
+        FROM raw_sap_ecc.mkpf m
+        JOIN raw_sap_ecc.mseg s ON s.mblnr = m.mblnr AND s.mjahr = m.mjahr
+        WHERE s.bwart = '313' AND s.shkzg = 'H' AND m.usnam = 'RFC-EWM' AND m.budat >= '20251027'
+        GROUP BY s.matnr
+        ORDER BY emergency_transfers DESC, s.matnr
+        LIMIT 1
+      ),
+      demand AS (
+        SELECT matnr, SUM(CASE WHEN bwart = '311' THEN menge ELSE -menge END) / 28.0 AS avg_daily_demand
+        FROM raw_sap_ecc.mseg
+        WHERE werks = 'CN10' AND lgort = '3000' AND umlgo = '2100'
+          AND ((bwart = '311' AND shkzg = 'H') OR (bwart = '312' AND shkzg = 'S'))
+          AND budat_mkpf BETWEEN '20260824' AND '20260920'
+        GROUP BY matnr
+      ),
+      stock AS (
+        SELECT matnr, quantity
+        FROM raw_ext.inventory_snapshot_daily
+        WHERE snapshot_date = DATE'2026-09-20' AND werks = 'CN10' AND lgort = '3000'
+          AND stock_category = 'UNRESTRICTED'
+      )
+      SELECT ltrim('0', t.matnr) AS material, t.emergency_transfers,
+             ROUND(COALESCE(s.quantity, 0) / d.avg_daily_demand, 2) AS days_of_supply
+      FROM top_material t
+      JOIN demand d ON d.matnr = t.matnr
+      LEFT JOIN stock s ON s.matnr = t.matnr
+    answer:
+      keys: [material]
+      values: [{column: emergency_transfers, abs: 0}, {column: days_of_supply, rel: 0.03, unit: days}]
+
+  - id: c107
+    question: >-
+      What was Dongguan's on-time PGI rate in fiscal period 11 of FY2026, and in the same period of the
+      previous fiscal year?
+    role: ops_analyst_global
+    category: multi_step
+    expected_behavior: answer
+    trap_tags: [fiscal_calendar, shared_plant]
+    required_kb_docs: [metrics/on_time_pgi_rate.md, concepts/fiscal_calendar.md, sites/dongguan.md]
+    required_tables: [raw_sap_ecc.likp, raw_sap_ecc.t009b]
+    notes: FY2026 P11 = 2026-08-24 to 2026-09-20; FY2025 P11 = 2025-08-25 to 2025-09-21.
+    reference_sql: |
+      SELECT ROUND(SUM(CASE WHEN wadat BETWEEN '20260824' AND '20260920' AND wadat_ist <> '00000000'
+                                 AND wadat_ist <= wadat THEN 1 ELSE 0 END)
+                   / SUM(CASE WHEN wadat BETWEEN '20260824' AND '20260920' THEN 1 ELSE 0 END), 4) AS rate_fy2026_p11,
+             ROUND(SUM(CASE WHEN wadat BETWEEN '20250825' AND '20250921' AND wadat_ist <> '00000000'
+                                 AND wadat_ist <= wadat THEN 1 ELSE 0 END)
+                   / SUM(CASE WHEN wadat BETWEEN '20250825' AND '20250921' THEN 1 ELSE 0 END), 4) AS rate_fy2025_p11
+      FROM raw_sap_ecc.likp
+      WHERE vstel = 'C300'
+    answer:
+      values: [{column: rate_fy2026_p11, abs: 0.002}, {column: rate_fy2025_p11, abs: 0.002}]
+
+  - id: c111
+    split: test
+    question: Which supplier country has had the best on-time delivery so far in fiscal year 2026, and what is its rate?
+    role: ops_analyst_global
+    category: multi_step
+    expected_behavior: answer
+    acceptable_behaviors: [answer, answer_with_assumption]
+    trap_tags: [metric_definition, expedited_orders]
+    required_kb_docs: [metrics/supplier_on_time_delivery.md, guides/procurement_and_stock.md]
+    required_tables: [raw_sap_ecc.ekko, raw_sap_ecc.eket, raw_sap_ecc.mseg, raw_sap_ecc.lfa1]
+    notes: Governed supplier OTD grouped by vendor country (LFA1.LAND1), both company codes.
+    reference_sql: |
+      WITH first_gr AS (
+        SELECT ebeln, MIN(budat_mkpf) AS first_receipt FROM raw_sap_ecc.mseg WHERE bwart = '101' GROUP BY ebeln
+      )
+      SELECT l.land1,
+             ROUND(AVG(CASE WHEN g.first_receipt <= date_format(date_add(to_date(e.eindt, 'yyyyMMdd'), 1), 'yyyyMMdd')
+                            THEN 1.0 ELSE 0.0 END), 4) AS on_time_rate
+      FROM raw_sap_ecc.ekko k
+      JOIN raw_sap_ecc.eket e ON e.ebeln = k.ebeln
+      JOIN first_gr g ON g.ebeln = k.ebeln
+      JOIN raw_sap_ecc.lfa1 l ON l.lifnr = k.lifnr
+      WHERE k.bsart = 'NB' AND g.first_receipt >= '20251027'
+      GROUP BY l.land1
+      ORDER BY on_time_rate DESC, l.land1
+      LIMIT 1
+    answer:
+      keys: [land1]
+      values: [{column: on_time_rate, abs: 0.005}]

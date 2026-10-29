@@ -1,0 +1,31 @@
+table: cases.supplier_attachment
+layer: cases
+source_system: case server
+description: "Files exchanged with suppliers on a case (decision record 005): the request sheet sent to the supplier and the sheet the supplier returned. One row per file; the file itself is in the cases volume (attachments) at storage_path, or under the local store directory in local mode. The parsed content of an inbound sheet is recorded as supplier proposals; the file is never executed."
+grain: One row per attachment.
+primary_key: [attachment_id]
+domain: Procurement
+subdomain: Procurement/Cases
+sensitivity: internal
+site_scope: all
+site_key: {column: plant, kind: plant}
+columns:
+  - {name: attachment_id, type: STRING, nullable: false, comment: "Attachment identifier: A-<case seq>-<case id>."}
+  - {name: case_id, type: STRING, nullable: false, comment: "Case the file belongs to."}
+  - {name: plant, type: STRING, nullable: false, comment: "Plant of the case."}
+  - {name: vendor, type: STRING, nullable: false, comment: "Vendor account number (LFA1 LIFNR)."}
+  - {name: message_id, type: STRING, nullable: true, comment: "Message the file was attached to, when any."}
+  - {name: direction, type: STRING, nullable: false, comment: "outbound (company to supplier) or inbound (supplier to company)."}
+  - {name: file_name, type: STRING, nullable: false, comment: "File name as given by the sender (base name only)."}
+  - {name: content_type, type: STRING, nullable: false, comment: "MIME type of the file."}
+  - {name: size_bytes, type: BIGINT, nullable: false, comment: "File size in bytes."}
+  - {name: sha256, type: STRING, nullable: false, comment: "SHA-256 of the file content (hex), for integrity checks."}
+  - {name: storage_path, type: STRING, nullable: false, comment: "Where the file is stored: the volume path /Volumes/<catalog>/cases/attachments/<case>/<attachment id>-<file name>, or a path under the local store directory."}
+  - {name: parsed_options, type: INT, nullable: false, comment: "Number of proposal options parsed from the file (0 for an outbound request sheet or an unparsed file)."}
+  - {name: uploaded_by, type: STRING, nullable: false, comment: "Who uploaded the file: human (purchasing), supplier (portal), or intake_agent."}
+  - {name: created_at, type: TIMESTAMP, nullable: false, comment: "When the file was recorded (UTC)."}
+tests:
+  accepted_values:
+    - {column: direction, values: [outbound, inbound]}
+    - {column: uploaded_by, values: [human, supplier, intake_agent]}
+access: [purchasing, case_writer]

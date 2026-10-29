@@ -1,0 +1,29 @@
+[project]
+name = "snm-evals"
+version = "0.0.0"
+description = "Evaluation cases, reference answers, and deterministic scoring for the analytics agent."
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    "snm-cases",
+    "mlflow-skinny==3.16.1",
+    "pydantic>=2.10",
+    "pyyaml>=6.0",
+    "snm-data",
+    "snm-tools",
+]
+
+[project.scripts]
+snm-evals = "snm_evals.cli:main"
+snm-sim = "snm_evals.flow:main"
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/snm_evals"]
+
+[tool.uv.sources]
+snm-cases = { workspace = true }
+snm-data = { workspace = true }
+snm-tools = { workspace = true }

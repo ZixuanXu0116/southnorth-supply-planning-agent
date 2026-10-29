@@ -1,0 +1,63 @@
+table: raw_sap_ecc.mseg
+layer: raw
+source_system: SAP_ECC
+description: >-
+  Material document items (SAP table MSEG). SHKZG gives the direction (H = issue/credit, S = receipt/debit).
+  Transfer postings (311, 313, 321, 411) have two items: the issuing side (H) and the receiving side (S,
+  XAUTO = 'X'). Reversal movements (e.g. 602 reverses 601) reference the original document in SMBLN/SJAHR/SMBLP.
+  DMBTR is in local currency WAERS, which differs by plant.
+grain: One row per client, material document, year, and item.
+primary_key: [mandt, mblnr, mjahr, zeile]
+domain: Inventory
+subdomain: Inventory/Movements
+sensitivity: internal
+site_key: {column: werks, kind: plant}
+columns:
+  - {name: mandt, type: STRING, nullable: false, sap_type: CLNT3, comment: "SAP client."}
+  - {name: mblnr, type: STRING, nullable: false, sap_type: CHAR10, comment: "Material document number."}
+  - {name: mjahr, type: STRING, nullable: false, sap_type: NUMC4, comment: "Material document year."}
+  - {name: zeile, type: STRING, nullable: false, sap_type: NUMC4, comment: "Item in material document."}
+  - {name: bwart, type: STRING, nullable: false, sap_type: CHAR3, comment: "Movement type: 101 goods receipt for purchase order, 311 one-step transfer between storage locations (to 2100: the goods issue of a delivery to the production supply area; between the main warehouse and its overflow hub: a pull or a move), 312 reversal of 311, 313/315 two-step transfer (removal / placement), 321 quality inspection to unrestricted, 411 transfer of special stock to own stock, 261 consumption against a production order, 561 initial stock entry. 201 and 601/602 are not used since generator 0.8."}
+  - {name: shkzg, type: STRING, nullable: false, sap_type: CHAR1, comment: "Debit/credit indicator: H = credit (stock decrease), S = debit (stock increase)."}
+  - {name: matnr, type: STRING, nullable: false, sap_type: CHAR18, comment: "Material number."}
+  - {name: werks, type: STRING, nullable: false, sap_type: CHAR4, comment: "Plant."}
+  - {name: lgort, type: STRING, nullable: false, sap_type: CHAR4, comment: "Storage location."}
+  - {name: sobkz, type: STRING, nullable: false, sap_type: CHAR1, comment: "Special stock indicator; blank = own stock, K = vendor consignment."}
+  - {name: insmk, type: STRING, nullable: false, sap_type: CHAR1, comment: "Stock type of the posting: blank = unrestricted, X = quality inspection."}
+  - {name: xauto, type: STRING, nullable: false, sap_type: CHAR1, comment: "X = item created automatically (receiving side of a transfer posting)."}
+  - {name: umwrk, type: STRING, nullable: false, sap_type: CHAR4, comment: "Counterpart plant of a transfer posting."}
+  - {name: umlgo, type: STRING, nullable: false, sap_type: CHAR4, comment: "Counterpart storage location of a transfer posting."}
+  - {name: menge, type: "DECIMAL(13,3)", nullable: false, sap_type: QUAN13_3, comment: "Quantity in base unit MEINS (always positive; direction is in SHKZG)."}
+  - {name: meins, type: STRING, nullable: false, sap_type: UNIT3, comment: "Base unit of measure."}
+  - {name: erfmg, type: "DECIMAL(13,3)", nullable: false, sap_type: QUAN13_3, comment: "Quantity in unit of entry ERFME."}
+  - {name: erfme, type: STRING, nullable: false, sap_type: UNIT3, comment: "Unit of entry."}
+  - {name: dmbtr, type: "DECIMAL(13,2)", nullable: false, sap_type: CURR13_2, comment: "Amount in local currency WAERS (USD for US10, CNY for CN10); 0 for postings of vendor consignment stock."}
+  - {name: waers, type: STRING, nullable: false, sap_type: CUKY5, comment: "Local currency key."}
+  - {name: lifnr, type: STRING, nullable: false, sap_type: CHAR10, comment: "Vendor for goods receipts and consignment stock."}
+  - {name: ebeln, type: STRING, nullable: false, sap_type: CHAR10, comment: "Purchase order for goods receipts."}
+  - {name: ebelp, type: STRING, nullable: false, sap_type: NUMC5, comment: "Purchase order item; '00000' if none."}
+  - {name: kostl, type: STRING, nullable: false, sap_type: CHAR10, comment: "Cost center for goods issues to a cost center."}
+  - {name: aufnr, type: STRING, nullable: false, sap_type: CHAR12, comment: "Production order for component consumption (movement type 261); blank otherwise."}
+  - {name: kunnr, type: STRING, nullable: false, sap_type: CHAR10, comment: "Customer for goods issues to a customer."}
+  - {name: vbeln_im, type: STRING, nullable: false, sap_type: CHAR10, comment: "Delivery number."}
+  - {name: vbelp_im, type: STRING, nullable: false, sap_type: NUMC6, comment: "Delivery item."}
+  - {name: smbln, type: STRING, nullable: false, sap_type: CHAR10, comment: "Material document being reversed; blank for non-reversal items."}
+  - {name: sjahr, type: STRING, nullable: false, sap_type: NUMC4, comment: "Year of the reversed material document; '0000' for non-reversal items."}
+  - {name: smblp, type: STRING, nullable: false, sap_type: NUMC4, comment: "Item of the reversed material document; '0000' for non-reversal items."}
+  - {name: budat_mkpf, type: STRING, nullable: false, sap_type: DATS, comment: "Posting date copied from the header (site-local)."}
+  - {name: cpudt_mkpf, type: STRING, nullable: false, sap_type: DATS, comment: "Entry date copied from the header (ECC system time)."}
+  - {name: cputm_mkpf, type: STRING, nullable: false, sap_type: TIMS, comment: "Entry time copied from the header (ECC system time)."}
+tests:
+  accepted_values:
+    - {column: bwart, values: ["101", "201", "311", "313", "315", "321", "411", "561", "601", "602", "261", '312']}
+    - {column: shkzg, values: [H, S]}
+    - {column: sobkz, values: ["", K]}
+    - {column: insmk, values: ["", X]}
+    - {column: xauto, values: ["", X]}
+    - {column: waers, values: [USD, CNY]}
+  relationships:
+    - {columns: [mandt, mblnr, mjahr], references: raw_sap_ecc.mkpf, ref_columns: [mandt, mblnr, mjahr]}
+    - {columns: [mandt, vbeln_im, vbelp_im], references: raw_sap_ecc.lips, ref_columns: [mandt, vbeln, posnr], skip_blank: true}
+    - {columns: [mandt, ebeln, ebelp], references: raw_sap_ecc.ekpo, ref_columns: [mandt, ebeln, ebelp], skip_blank: true}
+    - {columns: [mandt, lifnr], references: raw_sap_ecc.lfa1, ref_columns: [mandt, lifnr], skip_blank: true}
+access: [ops_analyst_global, site_manager_rr, site_manager_cn]

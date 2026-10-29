@@ -1,0 +1,28 @@
+table: curated.fct_stock_position_daily
+layer: curated
+materialization: view
+depends_on: [raw_ext.inventory_snapshot_daily, raw_sap_ecc.mseg, curated.dim_date]
+description: Available stock and days of supply per snapshot day, site, and material at the site's issuing storage location (the main warehouses Round Rock US10/1000 and Longgang CN10/1000, and the Dongguan overflow hub CN10/3000, which issues part of Longgang's lines directly). Available stock is the unrestricted quantity at the end of the day; demand is the issues to the production supply area 2100 (311 issuing items minus 312 reversals, site-local posting date) of the trailing 28 days; days of supply is NULL without demand. Materials are those ever stocked or issued at the location; days without a snapshot row have zero stock.
+grain: One row per snapshot day, site, and material.
+primary_key: [as_of_date, site, material]
+domain: Inventory
+subdomain: Inventory/Availability
+sensitivity: internal
+columns:
+  - {name: as_of_date, type: DATE, nullable: false, comment: "Site-local day the position refers to (end of day)."}
+  - {name: site, type: STRING, nullable: false, comment: "Round Rock, Longgang, or Dongguan."}
+  - {name: plant, type: STRING, nullable: false, comment: "Plant: US10 or CN10."}
+  - {name: storage_location, type: STRING, nullable: false, comment: "Customer-serving storage location: 1000 (hubs) or 3000 (Dongguan)."}
+  - {name: material, type: STRING, nullable: false, comment: "Material number without leading zeros."}
+  - {name: available_qty, type: "DECIMAL(15,3)", nullable: false, comment: "Unrestricted stock at the end of the day, base unit."}
+  - {name: demand_28d_qty, type: "DECIMAL(15,3)", nullable: false, comment: "Net issues to the production supply area (manufacturing demand) over the 28 days ending on the day, base unit."}
+  - {name: avg_daily_demand, type: "DECIMAL(15,3)", nullable: false, comment: "demand_28d_qty / 28."}
+  - {name: days_of_supply, type: DOUBLE, comment: "available_qty / avg_daily_demand; NULL when there was no demand in the window."}
+  - {name: has_demand, type: BOOLEAN, nullable: false, comment: "Demand in the trailing 28 days."}
+  - {name: is_out_of_stock, type: BOOLEAN, nullable: false, comment: "No available stock at the end of the day."}
+  - {name: fiscal_year, type: INT, comment: "Fiscal year of the day."}
+  - {name: fiscal_quarter, type: INT, comment: "Fiscal quarter of the day."}
+  - {name: fiscal_period, type: INT, comment: "Fiscal period of the day."}
+  - {name: fiscal_week, type: INT, comment: "Fiscal week of the day."}
+  - {name: is_fiscal_period_end, type: BOOLEAN, comment: "The day is the last day of its fiscal period."}
+access: []

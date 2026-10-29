@@ -1,0 +1,39 @@
+table: raw_sap_ecc.likp
+layer: raw
+source_system: SAP_ECC
+description: Delivery header (SAP table LIKP). Dates are YYYYMMDD strings; '00000000' means not yet set (e.g. no goods issue or no POD yet).
+grain: One row per client and outbound delivery.
+primary_key: [mandt, vbeln]
+domain: Outbound
+subdomain: Outbound/Shipping
+sensitivity: internal
+site_key: {column: vstel, kind: shipping_point}
+columns:
+  - {name: mandt, type: STRING, nullable: false, sap_type: CLNT3, comment: "SAP client."}
+  - {name: vbeln, type: STRING, nullable: false, sap_type: CHAR10, comment: "Delivery number (zero-padded, 10 characters)."}
+  - {name: lfart, type: STRING, nullable: false, sap_type: CHAR4, comment: "Delivery type: ZPSA = delivery of components to the production supply area of the manufacturing department (decision record 003: there are no external customers)."}
+  - {name: vstel, type: STRING, nullable: false, sap_type: CHAR4, comment: "Shipping point: U100 Round Rock, C100 Longgang, C300 Dongguan."}
+  - {name: vkorg, type: STRING, nullable: false, sap_type: CHAR4, comment: "Sales organization."}
+  - {name: kunnr, type: STRING, nullable: false, sap_type: CHAR10, comment: "Receiving partner: a work center of the plant's manufacturing department (KNA1 account group ZINT)."}
+  - {name: kunag, type: STRING, nullable: false, sap_type: CHAR10, comment: "Ordering partner: the same work center."}
+  - {name: erdat, type: STRING, nullable: false, sap_type: DATS, comment: "Creation date in ECC system time (America/Chicago)."}
+  - {name: erzet, type: STRING, nullable: false, sap_type: TIMS, comment: "Creation time in ECC system time (America/Chicago)."}
+  - {name: wadat, type: STRING, nullable: false, sap_type: DATS, comment: "Planned goods issue date (shipping point local date)."}
+  - {name: wadat_ist, type: STRING, nullable: false, sap_type: DATS, comment: "Actual goods issue (PGI) date, shipping point local date; '00000000' if not posted."}
+  - {name: kodat, type: STRING, nullable: false, sap_type: DATS, comment: "Planned picking date."}
+  - {name: lfdat, type: STRING, nullable: false, sap_type: DATS, comment: "Planned delivery date at the customer."}
+  - {name: podat, type: STRING, nullable: false, sap_type: DATS, comment: "Proof of delivery date; '00000000' if not confirmed or not POD-relevant."}
+  - {name: potim, type: STRING, nullable: false, sap_type: TIMS, comment: "Proof of delivery time; '000000' if not confirmed."}
+  - {name: lgnum, type: STRING, nullable: false, sap_type: CHAR4, comment: "EWM warehouse number that executes the delivery."}
+  - {name: tzonis, type: STRING, nullable: false, sap_type: CHAR6, comment: "Time zone of the shipping point (SAP time zone code: CST or UTC+8)."}
+  - {name: btgew, type: "DECIMAL(15,3)", nullable: false, sap_type: QUAN15_3, comment: "Total gross weight."}
+  - {name: gewei, type: STRING, nullable: false, sap_type: UNIT3, comment: "Weight unit."}
+tests:
+  accepted_values:
+    - {column: lfart, values: [ZPSA]}
+    - {column: vstel, values: [U100, C100, C300]}
+    - {column: lgnum, values: [RR01, SZ01, DG01]}
+    - {column: tzonis, values: [CST, UTC+8]}
+  relationships:
+    - {columns: [mandt, kunnr], references: raw_sap_ecc.kna1, ref_columns: [mandt, kunnr]}
+access: [ops_analyst_global, site_manager_rr, site_manager_cn, trade_compliance]

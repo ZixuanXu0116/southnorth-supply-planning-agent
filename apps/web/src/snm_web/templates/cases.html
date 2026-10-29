@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Cases · purchasing{% endblock %}
+{% block content %}
+<h1>Replenishment cases</h1>
+<div class="card filters">
+  <a href="/cases?scope=orders" class="{{ 'on' if scope == 'orders' }}">Order cases</a>
+  <a href="/cases?scope=transfers" class="{{ 'on' if scope == 'transfers' }}">Transfer cases (published to logistics)</a>
+  <a href="/cases?scope=all" class="{{ 'on' if scope == 'all' }}">All</a>
+  <form method="get" action="/cases" class="row" style="margin-top:8px">
+    <input type="hidden" name="scope" value="{{ scope }}">
+    <div><label>State</label><select name="state"><option value="">any</option>
+      {% for s in states %}<option value="{{ s }}" {% if s == state %}selected{% endif %}>{{ s }}</option>{% endfor %}</select></div>
+    <div><label>Condition</label><select name="condition"><option value="">any</option>
+      {% for c in ["shortage", "warning", "pull", "excess"] %}<option value="{{ c }}" {% if c == condition %}selected{% endif %}>{{ c }}</option>{% endfor %}</select></div>
+    <div><label>Triage</label><select name="triage"><option value="">any</option>
+      {% for t in ["agent_eligible", "human_handled", "no_supplier"] %}<option value="{{ t }}" {% if t == triage %}selected{% endif %}>{{ t }}</option>{% endfor %}</select></div>
+    <div class="checks"><label>&nbsp;</label><label><input type="checkbox" name="cleared" value="true"
+      {% if cleared %}checked{% endif %}> also cases the latest engine run no longer flags ({{ stale }})</label></div>
+    <div><label>&nbsp;</label><button type="submit" class="secondary" style="margin:0">Filter</button></div>
+  </form>
+  <p class="muted" style="margin:8px 0 0">{{ rows|length }} cases:
+    {% for s, n in counts|dictsort %}{{ s }} {{ n }}{% if not loop.last %}, {% endif %}{% endfor %}</p>
+</div>
+<div class="card">
+<table>
+  <tr><th>Case</th><th>State</th><th>Condition</th><th>Material</th><th>Trigger</th><th class="num">Gap</th><th>Lever</th><th>Triage</th><th>Supplier</th></tr>
+  {% for r in rows %}
+  <tr>
+    <td><a href="/cases/{{ r.case_id }}">{{ r.case_id }}</a></td><td>{{ r.state }}</td><td>{{ r.condition }}</td>
+    <td>{{ r.material }} · {{ r.description }}</td><td>{{ r.trigger_date }}</td><td class="num">{{ r.gap_qty|qty }}</td>
+    <td>{{ r.lever }}{% if r.covers_in_time is sameas false %} <span class="tag no">late</span>{% endif %}</td>
+    <td>{{ r.triage_class }}</td><td>{{ r.vendor_name or "" }}{% if r.cleared %} <span class="tag">no longer flagged</span>{% endif %}</td>
+  </tr>
+  {% else %}<tr><td colspan="9" class="muted">No cases match.</td></tr>{% endfor %}
+</table>
+</div>
+{% endblock %}

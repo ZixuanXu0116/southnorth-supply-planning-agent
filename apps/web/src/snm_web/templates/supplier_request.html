@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% set r = request_view %}
+{% set o = r.outward %}
+{% block title %}{{ r.case_id }} · {{ company }}{% endblock %}
+{% block area %}supplier portal{% endblock %}
+{% block content %}
+<p><a href="/supplier">&larr; Requests</a></p>
+<h1>Request {{ r.case_id }} <span class="tag">{{ r.status }}</span></h1>
+<div class="card">
+  <div class="grid">
+    <div><span>Request type</span>{{ o.request_type }}</div>
+    <div><span>Material</span>{{ o.material }} · {{ o.description }}</div>
+    <div><span>Quantity</span>{{ o.quantity|qty }} pieces</div>
+    <div><span>Needed at plant by</span>{{ o.needed_date }}</div>
+    <div><span>Ship to plant</span>{{ o.ship_to_plant }}</div>
+    {% if o.po_number %}<div><span>Purchase order</span>{{ o.po_number }} item {{ o.po_item }}</div>{% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <h2>Messages</h2>
+  {% for m in r.messages %}
+  <div class="msg {{ 'in' if m.from == 'you' else 'out' }}"><b>{{ m.from }}</b> · {{ m.at[:16] }}
+{{ m.body }}</div>
+  {% endfor %}
+</div>
+
+{% if r.attachments %}
+<div class="card">
+  <h2>Files</h2>
+  <table><tr><th>File</th><th>From</th><th>When</th></tr>
+  {% for a in r.attachments %}
+  <tr><td><a href="/supplier/{{ r.case_id }}/files/{{ a.attachment_id }}">{{ a.file_name }}</a></td>
+      <td>{{ 'you' if a.direction == 'inbound' else 'SouthNorth Solutions' }}</td><td>{{ a.at[:16] }}</td></tr>
+  {% endfor %}</table>
+</div>
+{% endif %}
+
+{% if r.options %}
+<div class="card">
+  <h2>Your options so far</h2>
+  <table><tr><th>#</th><th>Kind</th><th class="num">Qty</th><th>Ship</th><th>Arrival</th><th class="num">Unit price</th><th class="num">Surcharge</th><th class="num">Freight</th><th>Valid until</th><th>Conditions</th></tr>
+  {% for p in r.options %}
+  <tr><td>{{ p.option_id }}</td><td>{{ p.kind }}</td><td class="num">{{ p.quantity|qty }}</td><td>{{ p.ship_date or "" }}</td><td>{{ p.arrival_date or "" }}{% for s in p.split_deliveries %}<br>{{ s.quantity|qty }} on {{ s.arrival_date }}{% endfor %}</td>
+      <td class="num">{{ p.unit_price|money }}</td><td class="num">{% if p.surcharge_pct is not none %}{{ p.surcharge_pct }} %{% else %}{{ p.surcharge_amount|money }}{% endif %}</td>
+      <td class="num">{{ p.freight_amount|money }}</td><td>{{ p.valid_until or "" }}</td><td>{{ p.conditions or "" }}</td></tr>
+  {% endfor %}</table>
+</div>
+{% endif %}
+
+{% if r.status == "open" %}
+<div class="card">
+  <h2>Your answer</h2>
+  <form method="post" action="/supplier/{{ r.case_id }}/reply" enctype="multipart/form-data">
+    <label>Message</label><textarea name="body"></textarea>
+    <label>Filled request sheet (.xlsx, up to five options)</label><input type="file" name="sheet" accept=".xlsx">
+    <p class="muted">Or enter one option here:</p>
+    <div class="row">
+      <div><label>Kind</label><select name="kind"><option value="">none</option>{% for k in kinds %}<option value="{{ k }}">{{ k }}</option>{% endfor %}</select></div>
+      <div><label>Quantity</label><input name="quantity"></div>
+      <div><label>Ship date</label><input type="date" name="ship_date"></div>
+      <div><label>Arrival date</label><input type="date" name="arrival_date"></div>
+      <div><label>Unit price</label><input name="unit_price"></div>
+      <div><label>Surcharge %</label><input name="surcharge_pct"></div>
+      <div><label>Freight</label><input name="freight_amount"></div>
+      <div><label>Valid until</label><input type="date" name="valid_until"></div>
+    </div>
+    <label>Conditions</label><input name="conditions" maxlength="500">
+    <button type="submit">Send the answer</button>
+  </form>
+</div>
+{% endif %}
+{% endblock %}

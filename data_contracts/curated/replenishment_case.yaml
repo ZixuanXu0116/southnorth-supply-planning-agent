@@ -1,0 +1,57 @@
+table: curated.replenishment_case
+layer: curated
+materialization: table
+description: Replenishment cases opened by the engine from the supply projection, one per material, plant, and condition (shortage = projected stock below zero, warning = below safety stock, excess = above the maximum for eight weeks), with the gap, the recommended lever (transfer, expedite an open purchase order, new order, expedited new order, or hold for excess), its coverage date and cost, the alternatives, the deterministic rationale, and the triage class (agent_eligible, human_handled, no_supplier). Costs and values are commercial data.
+grain: One row per as-of date and case.
+primary_key: [as_of_date, case_id]
+domain: Procurement
+subdomain: Procurement/Planning
+sensitivity: internal
+site_key: {column: plant, kind: plant}
+columns:
+  - {name: case_id, type: STRING, nullable: false, comment: "Case identifier: C-<plant>-<material>-<SH|WA|EX>-<trigger date>."}
+  - {name: as_of_date, type: DATE, nullable: false, comment: "Day the case was computed for."}
+  - {name: material, type: STRING, nullable: false, comment: "Material number without leading zeros."}
+  - {name: description, type: STRING, nullable: false, comment: "Material description."}
+  - {name: plant, type: STRING, nullable: false, comment: "Plant: US10 or CN10."}
+  - {name: site, type: STRING, nullable: false, comment: "Hub site of the plant."}
+  - {name: criticality, type: STRING, nullable: false, comment: "ABC criticality class of the material at the plant (MARC MAABC)."}
+  - {name: condition, type: STRING, nullable: false, comment: "shortage (pooled stock of the main warehouse and its overflow hub below zero), warning (pooled stock below the minimum, the safety stock), pull (pooled stock fine but the main warehouse below the minimum: stock to move in from the overflow hub), or excess (main warehouse above the maximum: stock to move out to the overflow hub)."}
+  - {name: trigger_date, type: DATE, nullable: false, comment: "First day the condition holds (shortage date, first day below safety stock, or the as-of date for excess)."}
+  - {name: gap_qty, type: DOUBLE, nullable: false, comment: "Quantity missing to stay at zero (shortage) or at safety stock (warning), or the quantity above the maximum (excess)."}
+  - {name: value_usd, type: "DECIMAL(15,2)", nullable: false, sensitivity: commercial, comment: "Gap quantity at the valuation price, in USD."}
+  - {name: on_hand_qty, type: DOUBLE, nullable: false, comment: "Available stock at the main warehouse on the as-of date."}
+  - {name: overflow_on_hand_qty, type: DOUBLE, nullable: false, comment: "Available stock (including stock in transit) at the plant's overflow hub on the as-of date; counted in the pooled projection."}
+  - {name: backlog_qty, type: DOUBLE, nullable: false, comment: "Overdue firm demand on the as-of date (customer and production)."}
+  - {name: production_backlog_qty, type: DOUBLE, nullable: false, comment: "The part of the backlog that is overdue open production order reservations."}
+  - {name: open_order_qty, type: DOUBLE, nullable: false, comment: "Open purchase order quantity within the horizon."}
+  - {name: daily_demand_rate, type: DOUBLE, nullable: false, comment: "Trailing 28-day issues from the main warehouse to the manufacturing department per day (staging to the production supply area): the point forecast's rate."}
+  - {name: demand_model, type: STRING, comment: "JSON of the demand model (decision record 002): Croston-SBA on the 26 weeks before the as-of date (model, weeks, alpha, rate_per_week, probability that a week has demand, sizes of the weeks with demand), the demand-frequency segment (weeks with outflow in the last 13), the service target by criticality, and the segment's calibration curve from the model's stock-out probability to the one observed in the backtest (NULL where the segment is not qualified: no outflow in the last 13 weeks)."}
+  - {name: stockout_risk_no_action, type: DOUBLE, comment: "Chance that the pooled stock falls below zero on or before the trigger date if nothing is done (0 to 1): the share of 2,000 simulated demand paths, calibrated through the segment's curve; NULL for pull and excess cases and where the demand model is not qualified."}
+  - {name: safety_stock_qty, type: DOUBLE, nullable: false, comment: "Safety stock (MARC EISBE)."}
+  - {name: max_stock_qty, type: DOUBLE, nullable: false, comment: "Maximum stock level (MARC MABST)."}
+  - {name: vendor, type: STRING, comment: "Vendor of the material's most recent purchase order at the plant; NULL without order history."}
+  - {name: vendor_name, type: STRING, comment: "Vendor name."}
+  - {name: supplier_class, type: STRING, comment: "Vendor ABC class by trailing 12-month spend."}
+  - {name: lever, type: STRING, nullable: false, comment: "Recommended action: transfer (pull from the overflow hub into the main warehouse), move_to_overflow (move surplus out to the overflow hub), expedite, new_order, or expedited_new_order. Expedite levers are recommended for shortage cases only; a warning gets a new order; moves are reviewed by logistics."}
+  - {name: coverage_date, type: DATE, comment: "Day the recommended lever covers the gap; NULL for hold."}
+  - {name: covers_in_time, type: BOOLEAN, nullable: false, comment: "The lever covers the gap on or before the trigger date."}
+  - {name: days_short, type: INT, nullable: false, comment: "Days between the trigger date and the coverage date when the recommended lever is not in time (0 otherwise); for a warning, the days stock stays below safety stock before the standard order arrives."}
+  - {name: lever_qty, type: DOUBLE, nullable: false, comment: "Quantity moved or ordered by the recommended lever."}
+  - {name: lever_detail, type: STRING, nullable: false, comment: "JSON details of the recommended lever without costs: purchase order and item for expedite (ebeln, ebelp, days_gained), from_location, to_location, and lead days for a transfer or a move, lead days for new orders."}
+  - {name: lever_cost_usd, type: "DECIMAL(15,2)", nullable: false, sensitivity: commercial, comment: "Incremental cost of the recommended lever under the cost model (surcharge, freight, transfer, order cost), in USD."}
+  - {name: stockout_cost_usd, type: "DECIMAL(15,2)", nullable: false, sensitivity: commercial, comment: "Line-down cost of the days short of a shortage case under the cost model, in USD (0 when covered in time, and for warnings)."}
+  - {name: alternatives, type: STRING, nullable: false, comment: "JSON list of the other levers with their coverage dates and quantities."}
+  - {name: alternative_costs_usd, type: STRING, nullable: false, sensitivity: commercial, comment: "JSON object of lever to incremental cost in USD, including the recommended one."}
+  - {name: rationale, type: STRING, nullable: false, comment: "Deterministic explanation of the case and the recommendation."}
+  - {name: triage_class, type: STRING, nullable: false, comment: "agent_eligible (supplier exchange by the intake agent), human_handled, or no_supplier."}
+  - {name: triage_reasons, type: STRING, nullable: false, comment: "Why the case was classified as it was."}
+  - {name: engine_version, type: STRING, nullable: false, comment: "Version of the replenishment engine."}
+  - {name: params_digest, type: STRING, nullable: false, comment: "Digest of the engine parameters used."}
+  - {name: status, type: STRING, nullable: false, comment: "Case status at computation (new); later states live in the case store."}
+tests:
+  accepted_values:
+    - {column: condition, values: [shortage, warning, pull, excess]}
+    - {column: lever, values: [transfer, move_to_overflow, expedite, new_order, expedited_new_order, hold]}
+    - {column: triage_class, values: [agent_eligible, human_handled, no_supplier]}
+access: [ops_analyst_global, site_manager_rr, site_manager_cn, purchasing]

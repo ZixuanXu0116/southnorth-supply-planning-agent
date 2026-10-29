@@ -1,0 +1,2170 @@
+{
+  "suite": "bank_v5",
+  "as_of": "2026-09-21",
+  "data_snapshot": {
+    "profile": "small",
+    "generator_version": "0.8.0",
+    "seed": 20260924
+  },
+  "computed_at": "2026-10-17T17:08:18+00:00",
+  "results": {
+    "seed_01": {
+      "primary": {
+        "columns": [
+          "vstel",
+          "on_time_pgi_rate"
+        ],
+        "rows": [
+          [
+            "C100",
+            0.9683
+          ],
+          [
+            "C300",
+            0.9599
+          ],
+          [
+            "U100",
+            0.9231
+          ]
+        ]
+      }
+    },
+    "seed_02": {
+      "primary": {
+        "columns": [
+          "lines_shipped"
+        ],
+        "rows": [
+          [
+            3829
+          ]
+        ]
+      }
+    },
+    "seed_03": {
+      "primary": {
+        "columns": [
+          "lgnum",
+          "median_minutes"
+        ],
+        "rows": [
+          [
+            "DG01",
+            18.225
+          ],
+          [
+            "RR01",
+            47.675
+          ],
+          [
+            "SZ01",
+            11.083333
+          ]
+        ]
+      }
+    },
+    "seed_04": {
+      "primary": {
+        "columns": [
+          "median_minutes"
+        ],
+        "rows": [
+          [
+            129.833333
+          ]
+        ]
+      }
+    },
+    "seed_05": {
+      "primary": {
+        "columns": [
+          "vstel",
+          "otd_rate",
+          "pending_pod"
+        ],
+        "rows": [
+          [
+            "C100",
+            0.7488,
+            4
+          ],
+          [
+            "C300",
+            0.7487,
+            0
+          ],
+          [
+            "U100",
+            0.8462,
+            0
+          ]
+        ]
+      }
+    },
+    "seed_07": {
+      "primary": {
+        "columns": [
+          "material",
+          "shipped_qty_ea"
+        ],
+        "rows": [
+          [
+            "40000758",
+            "6075.000"
+          ],
+          [
+            "40000509",
+            "3200.000"
+          ],
+          [
+            "40001210",
+            "3100.000"
+          ],
+          [
+            "40000753",
+            "3000.000"
+          ],
+          [
+            "40000061",
+            "2800.000"
+          ]
+        ]
+      }
+    },
+    "seed_08": {
+      "primary": {
+        "columns": [
+          "autostore_share"
+        ],
+        "rows": [
+          [
+            "0.5644"
+          ]
+        ]
+      }
+    },
+    "seed_09": {
+      "primary": {
+        "columns": [
+          "vstel",
+          "reversed_deliveries"
+        ],
+        "rows": [
+          [
+            "C100",
+            15
+          ],
+          [
+            "C300",
+            33
+          ],
+          [
+            "U100",
+            3
+          ]
+        ]
+      }
+    },
+    "seed_10": {
+      "primary": {
+        "columns": [
+          "lgtyp",
+          "bins"
+        ],
+        "rows": [
+          [
+            "0010",
+            20
+          ],
+          [
+            "0020",
+            30
+          ],
+          [
+            "0030",
+            20
+          ],
+          [
+            "8000",
+            20
+          ],
+          [
+            "9010",
+            2
+          ],
+          [
+            "9020",
+            4
+          ]
+        ]
+      }
+    },
+    "seed_11": {
+      "primary": {
+        "columns": [
+          "avg_gross_weight_kg"
+        ],
+        "rows": [
+          [
+            "479.814"
+          ]
+        ]
+      }
+    },
+    "seed_12": {
+      "primary": {
+        "columns": [
+          "serialized_materials"
+        ],
+        "rows": [
+          [
+            38
+          ]
+        ]
+      }
+    },
+    "seed_13": {
+      "primary": {
+        "columns": [
+          "werks",
+          "waers",
+          "net_gi_value"
+        ],
+        "rows": [
+          [
+            "CN10",
+            "CNY",
+            "1774321995.46"
+          ],
+          [
+            "US10",
+            "USD",
+            "16874118.77"
+          ]
+        ]
+      },
+      "per_site": {
+        "columns": [
+          "vstel",
+          "waers",
+          "net_gi_value"
+        ],
+        "rows": [
+          [
+            "C100",
+            "CNY",
+            "1511293147.01"
+          ],
+          [
+            "C300",
+            "CNY",
+            "263028848.45"
+          ],
+          [
+            "U100",
+            "USD",
+            "16874118.77"
+          ]
+        ]
+      },
+      "per_currency": {
+        "columns": [
+          "waers",
+          "net_gi_value"
+        ],
+        "rows": [
+          [
+            "CNY",
+            "1774321995.46"
+          ],
+          [
+            "USD",
+            "16874118.77"
+          ]
+        ]
+      }
+    },
+    "seed_14": {
+      "primary": {
+        "columns": [
+          "pick_tasks"
+        ],
+        "rows": [
+          [
+            246
+          ]
+        ]
+      }
+    },
+    "seed_15": {
+      "primary": {
+        "columns": [
+          "pieces_shipped"
+        ],
+        "rows": [
+          [
+            "26043.000"
+          ]
+        ]
+      }
+    },
+    "seed_16": {
+      "primary": {
+        "columns": [
+          "vstel",
+          "deliveries_shipped"
+        ],
+        "rows": [
+          [
+            "C100",
+            13
+          ],
+          [
+            "C300",
+            1
+          ],
+          [
+            "U100",
+            0
+          ]
+        ]
+      }
+    },
+    "seed_20": {
+      "primary": {
+        "columns": [
+          "shift",
+          "pick_tasks"
+        ],
+        "rows": [
+          [
+            "A",
+            780
+          ]
+        ]
+      }
+    },
+    "c021": {
+      "primary": {
+        "columns": [
+          "vstel",
+          "on_time_pgi_rate"
+        ],
+        "rows": [
+          [
+            "C100",
+            0.9604
+          ],
+          [
+            "C300",
+            0.957
+          ],
+          [
+            "U100",
+            0.8636
+          ]
+        ]
+      }
+    },
+    "c022": {
+      "primary": {
+        "columns": [
+          "on_time_pgi_rate"
+        ],
+        "rows": [
+          [
+            0.9588
+          ]
+        ]
+      }
+    },
+    "c023": {
+      "primary": {
+        "columns": [
+          "vstel",
+          "on_time_pgi_rate"
+        ],
+        "rows": [
+          [
+            "C100",
+            0.9536
+          ],
+          [
+            "C300",
+            0.9632
+          ],
+          [
+            "U100",
+            0.9524
+          ]
+        ]
+      }
+    },
+    "c024": {
+      "primary": {
+        "columns": [
+          "vstel",
+          "lines_shipped"
+        ],
+        "rows": [
+          [
+            "C100",
+            13180
+          ],
+          [
+            "C300",
+            2456
+          ],
+          [
+            "U100",
+            1364
+          ]
+        ]
+      }
+    },
+    "c025": {
+      "primary": {
+        "columns": [
+          "lines_shipped"
+        ],
+        "rows": [
+          [
+            510
+          ]
+        ]
+      }
+    },
+    "c026": {
+      "primary": {
+        "columns": [
+          "median_minutes",
+          "p90_minutes"
+        ],
+        "rows": [
+          [
+            49.483333,
+            97.52999999999999
+          ]
+        ]
+      }
+    },
+    "c027": {
+      "primary": {
+        "columns": [
+          "median_minutes"
+        ],
+        "rows": [
+          [
+            1.516667
+          ]
+        ]
+      }
+    },
+    "c028": {
+      "primary": {
+        "columns": [
+          "lgnum",
+          "median_minutes"
+        ],
+        "rows": [
+          [
+            "DG01",
+            132.7
+          ],
+          [
+            "RR01",
+            306.85
+          ],
+          [
+            "SZ01",
+            399.50833350000005
+          ]
+        ]
+      }
+    },
+    "c029": {
+      "primary": {
+        "columns": [
+          "otd_rate"
+        ],
+        "rows": [
+          [
+            0.9091
+          ]
+        ]
+      }
+    },
+    "c030": {
+      "primary": {
+        "columns": [
+          "vstel",
+          "available_qty"
+        ],
+        "rows": [
+          [
+            "C100",
+            "324804.000"
+          ],
+          [
+            "C300",
+            "37671.000"
+          ],
+          [
+            "U100",
+            "30764.000"
+          ]
+        ]
+      },
+      "snapshot_2026_09_20": {
+        "columns": [
+          "vstel",
+          "available_qty"
+        ],
+        "rows": [
+          [
+            "C100",
+            "324357.000"
+          ],
+          [
+            "C300",
+            "39261.000"
+          ],
+          [
+            "U100",
+            "30764.000"
+          ]
+        ]
+      }
+    },
+    "c031": {
+      "primary": {
+        "columns": [
+          "available_qty"
+        ],
+        "rows": [
+          [
+            "299.000"
+          ]
+        ]
+      }
+    },
+    "c032": {
+      "primary": {
+        "columns": [
+          "available_qty"
+        ],
+        "rows": [
+          [
+            "1305.000"
+          ]
+        ]
+      }
+    },
+    "c033": {
+      "primary": {
+        "columns": [
+          "median_days_of_supply"
+        ],
+        "rows": [
+          [
+            85.97647075007336
+          ]
+        ]
+      }
+    },
+    "c034": {
+      "primary": {
+        "columns": [
+          "materials_below_7_days"
+        ],
+        "rows": [
+          [
+            22
+          ]
+        ]
+      }
+    },
+    "c035": {
+      "primary": {
+        "columns": [
+          "vstel",
+          "days_of_supply"
+        ],
+        "rows": [
+          [
+            "C100",
+            "80.01"
+          ],
+          [
+            "C300",
+            "254.24"
+          ],
+          [
+            "U100",
+            "83.44"
+          ]
+        ]
+      }
+    },
+    "c036": {
+      "primary": {
+        "columns": [
+          "bukrs",
+          "on_time_rate"
+        ],
+        "rows": [
+          [
+            "1000",
+            "0.8339"
+          ],
+          [
+            "2000",
+            "0.8036"
+          ]
+        ]
+      },
+      "per_plant": {
+        "columns": [
+          "werks",
+          "on_time_rate"
+        ],
+        "rows": [
+          [
+            "CN10",
+            "0.8036"
+          ],
+          [
+            "US10",
+            "0.8339"
+          ]
+        ]
+      }
+    },
+    "c037": {
+      "primary": {
+        "columns": [
+          "name1",
+          "on_time_rate"
+        ],
+        "rows": [
+          [
+            "Hoshino RF Devices",
+            "0.6926"
+          ],
+          [
+            "Blue Fen Electronics",
+            "0.7325"
+          ],
+          [
+            "Lindmark Sensorik",
+            "0.7366"
+          ]
+        ]
+      }
+    },
+    "c038": {
+      "primary": {
+        "columns": [
+          "on_time_rate"
+        ],
+        "rows": [
+          [
+            "0.6512"
+          ]
+        ]
+      },
+      "per_company_code": {
+        "columns": [
+          "bukrs",
+          "on_time_rate"
+        ],
+        "rows": [
+          [
+            "1000",
+            "0.4546"
+          ],
+          [
+            "2000",
+            "0.7188"
+          ]
+        ]
+      }
+    },
+    "c039": {
+      "primary": {
+        "columns": [
+          "deliveries_shipped",
+          "lines_shipped"
+        ],
+        "rows": [
+          [
+            199,
+            786
+          ]
+        ]
+      }
+    },
+    "c040": {
+      "primary": {
+        "columns": [
+          "deliveries_due",
+          "on_time_pgi_rate"
+        ],
+        "rows": [
+          [
+            215,
+            0.9674
+          ]
+        ]
+      }
+    },
+    "c041": {
+      "primary": {
+        "columns": [
+          "bukrs",
+          "purchase_orders"
+        ],
+        "rows": [
+          [
+            "1000",
+            2300
+          ],
+          [
+            "2000",
+            4871
+          ]
+        ]
+      }
+    },
+    "c042": {
+      "primary": {
+        "columns": [
+          "werks",
+          "expedited_pos"
+        ],
+        "rows": [
+          [
+            "CN10",
+            2
+          ]
+        ]
+      }
+    },
+    "c043": {
+      "primary": {
+        "columns": [
+          "name1",
+          "po_value_usd"
+        ],
+        "rows": [
+          [
+            "Seoin Flow Control",
+            "5842780.41"
+          ],
+          [
+            "Hanul Process Parts",
+            "5206131.18"
+          ],
+          [
+            "Formosa Quartz Works",
+            "5064423.00"
+          ],
+          [
+            "Pearl Delta Consumables",
+            "4264099.99"
+          ],
+          [
+            "Straits Machining",
+            "4129026.51"
+          ]
+        ]
+      }
+    },
+    "c044": {
+      "primary": {
+        "columns": [
+          "bonded_receipts"
+        ],
+        "rows": [
+          [
+            183
+          ]
+        ]
+      }
+    },
+    "c045": {
+      "primary": {
+        "columns": [
+          "lgort",
+          "stock_qty"
+        ],
+        "rows": [
+          [
+            "2001",
+            "16364.000"
+          ]
+        ]
+      }
+    },
+    "c047": {
+      "primary": {
+        "columns": [
+          "werks",
+          "qi_share"
+        ],
+        "rows": [
+          [
+            "CN10",
+            "0.1051"
+          ],
+          [
+            "US10",
+            "0.1622"
+          ]
+        ]
+      }
+    },
+    "c048": {
+      "primary": {
+        "columns": [
+          "materials_in_qi",
+          "qi_qty"
+        ],
+        "rows": [
+          [
+            1,
+            "6.000"
+          ]
+        ]
+      }
+    },
+    "c049": {
+      "primary": {
+        "columns": [
+          "consignment_qty",
+          "vendors"
+        ],
+        "rows": [
+          [
+            "44997.000",
+            15
+          ]
+        ]
+      }
+    },
+    "c050": {
+      "primary": {
+        "columns": [
+          "vstel",
+          "lines_per_delivery"
+        ],
+        "rows": [
+          [
+            "C100",
+            19.698
+          ],
+          [
+            "C300",
+            3.95
+          ],
+          [
+            "U100",
+            20.154
+          ]
+        ]
+      }
+    },
+    "c054": {
+      "primary": {
+        "columns": [
+          "waers",
+          "po_value"
+        ],
+        "rows": [
+          [
+            "CNY",
+            "367314916.64"
+          ],
+          [
+            "USD",
+            "5064423.00"
+          ]
+        ]
+      }
+    },
+    "c055": {
+      "primary": {
+        "columns": [
+          "bukrs",
+          "overdue_lines"
+        ],
+        "rows": [
+          [
+            "1000",
+            5
+          ],
+          [
+            "2000",
+            19
+          ]
+        ]
+      }
+    },
+    "c056": {
+      "primary": {
+        "columns": [
+          "material",
+          "shipped_qty_ea"
+        ],
+        "rows": [
+          [
+            "40000713",
+            "5300.000"
+          ],
+          [
+            "40001443",
+            "4600.000"
+          ],
+          [
+            "40000758",
+            "4475.000"
+          ],
+          [
+            "40000061",
+            "4400.000"
+          ],
+          [
+            "40000442",
+            "3800.000"
+          ]
+        ]
+      }
+    },
+    "c057": {
+      "primary": {
+        "columns": [
+          "lgnum",
+          "empty_bins"
+        ],
+        "rows": [
+          [
+            "DG01",
+            12
+          ],
+          [
+            "RR01",
+            17
+          ],
+          [
+            "SZ01",
+            71
+          ]
+        ]
+      }
+    },
+    "c058": {
+      "primary": {
+        "columns": [
+          "werks",
+          "reorder_point_materials"
+        ],
+        "rows": [
+          [
+            "CN10",
+            101
+          ],
+          [
+            "US10",
+            75
+          ]
+        ]
+      }
+    },
+    "c059": {
+      "primary": {
+        "columns": [
+          "matkl",
+          "avg_standard_price_usd"
+        ],
+        "rows": [
+          [
+            "SP-CHK",
+            "5407.42"
+          ],
+          [
+            "SP-CON",
+            "47.05"
+          ],
+          [
+            "SP-ELE",
+            "2071.20"
+          ],
+          [
+            "SP-FST",
+            "6.71"
+          ],
+          [
+            "SP-GAS",
+            "1111.76"
+          ],
+          [
+            "SP-RFP",
+            "7026.00"
+          ],
+          [
+            "SP-SEL",
+            "176.42"
+          ],
+          [
+            "SP-SEN",
+            "1106.76"
+          ],
+          [
+            "SP-VAC",
+            "4001.11"
+          ],
+          [
+            "SP-WHD",
+            "3310.18"
+          ]
+        ]
+      }
+    },
+    "c060": {
+      "primary": {
+        "columns": [
+          "box_materials"
+        ],
+        "rows": [
+          [
+            117
+          ]
+        ]
+      }
+    },
+    "c062": {
+      "primary": {
+        "columns": [
+          "land1",
+          "suppliers"
+        ],
+        "rows": [
+          [
+            "CN",
+            3
+          ],
+          [
+            "DE",
+            3
+          ],
+          [
+            "JP",
+            3
+          ],
+          [
+            "KR",
+            2
+          ],
+          [
+            "MY",
+            2
+          ],
+          [
+            "TW",
+            2
+          ],
+          [
+            "US",
+            5
+          ]
+        ]
+      }
+    },
+    "c063": {
+      "primary": {
+        "columns": [
+          "materials"
+        ],
+        "rows": [
+          [
+            87
+          ]
+        ]
+      }
+    },
+    "c064": {
+      "primary": {
+        "columns": [
+          "lgnum",
+          "waves_released"
+        ],
+        "rows": [
+          [
+            "DG01",
+            18
+          ],
+          [
+            "RR01",
+            11
+          ],
+          [
+            "SZ01",
+            28
+          ]
+        ]
+      }
+    },
+    "c065": {
+      "primary": {
+        "columns": [
+          "odos_created"
+        ],
+        "rows": [
+          [
+            8
+          ]
+        ]
+      }
+    },
+    "c066": {
+      "primary": {
+        "columns": [
+          "materials"
+        ],
+        "rows": [
+          [
+            330
+          ]
+        ]
+      }
+    },
+    "c067": {
+      "primary": {
+        "columns": [
+          "lgtyp",
+          "bins"
+        ],
+        "rows": [
+          [
+            "0020",
+            80
+          ],
+          [
+            "0050",
+            20
+          ],
+          [
+            "9010",
+            2
+          ],
+          [
+            "9020",
+            4
+          ],
+          [
+            "AS01",
+            400
+          ],
+          [
+            "BND1",
+            20
+          ]
+        ]
+      }
+    },
+    "c068": {
+      "primary": {
+        "columns": [
+          "blocked_bins"
+        ],
+        "rows": [
+          [
+            11
+          ]
+        ]
+      }
+    },
+    "c070": {
+      "primary": {
+        "columns": [
+          "units_received"
+        ],
+        "rows": [
+          [
+            "113826.000"
+          ]
+        ]
+      },
+      "own_stock_only": {
+        "columns": [
+          "units_received"
+        ],
+        "rows": [
+          [
+            "98144.000"
+          ]
+        ]
+      }
+    },
+    "c071": {
+      "primary": {
+        "columns": [
+          "in_transfer_qty"
+        ],
+        "rows": [
+          [
+            "270.000"
+          ]
+        ]
+      }
+    },
+    "c072": {
+      "primary": {
+        "columns": [
+          "stock_value_cny"
+        ],
+        "rows": [
+          [
+            "145990384.74"
+          ]
+        ]
+      },
+      "unrestricted_only": {
+        "columns": [
+          "stock_value_cny"
+        ],
+        "rows": [
+          [
+            "145990384.74"
+          ]
+        ]
+      }
+    },
+    "c073": {
+      "primary": {
+        "columns": [
+          "out_of_stock_materials"
+        ],
+        "rows": [
+          [
+            1
+          ]
+        ]
+      }
+    },
+    "c074": {
+      "primary": {
+        "columns": [
+          "emergency_transfers"
+        ],
+        "rows": [
+          [
+            63
+          ]
+        ]
+      }
+    },
+    "c075": {
+      "primary": {
+        "columns": [
+          "werks",
+          "waers",
+          "receipt_value"
+        ],
+        "rows": [
+          [
+            "CN10",
+            "CNY",
+            "1706855601.55"
+          ],
+          [
+            "US10",
+            "USD",
+            "16138493.85"
+          ]
+        ]
+      },
+      "per_currency": {
+        "columns": [
+          "waers",
+          "receipt_value"
+        ],
+        "rows": [
+          [
+            "CNY",
+            "1706855601.55"
+          ],
+          [
+            "USD",
+            "16138493.85"
+          ]
+        ]
+      }
+    },
+    "c076": {
+      "primary": {
+        "columns": [
+          "pick_tasks"
+        ],
+        "rows": [
+          [
+            83
+          ]
+        ]
+      }
+    },
+    "c077": {
+      "primary": {
+        "columns": [
+          "deliveries_shipped"
+        ],
+        "rows": [
+          [
+            22
+          ]
+        ]
+      }
+    },
+    "c078": {
+      "primary": {
+        "columns": [
+          "on_time_pgi_rate"
+        ],
+        "rows": [
+          [
+            0.9623
+          ]
+        ]
+      }
+    },
+    "c079": {
+      "primary": {
+        "columns": [
+          "pieces_shipped"
+        ],
+        "rows": [
+          [
+            "69317.000"
+          ]
+        ]
+      }
+    },
+    "c080": {
+      "primary": {
+        "columns": [
+          "total_stock_qty"
+        ],
+        "rows": [
+          [
+            "47134.000"
+          ]
+        ]
+      }
+    },
+    "c081": {
+      "primary": {
+        "columns": [
+          "available_qty"
+        ],
+        "rows": [
+          [
+            "1248.000"
+          ]
+        ]
+      }
+    },
+    "c082": {
+      "primary": {
+        "columns": [
+          "deliveries_created"
+        ],
+        "rows": [
+          [
+            8
+          ]
+        ]
+      }
+    },
+    "c083": {
+      "primary": {
+        "columns": [
+          "emergency_share"
+        ],
+        "rows": [
+          [
+            "0.0446"
+          ]
+        ]
+      }
+    },
+    "c084": {
+      "primary": {
+        "columns": [
+          "operator_pick_tasks"
+        ],
+        "rows": [
+          [
+            1821
+          ]
+        ]
+      }
+    },
+    "c096": {
+      "primary": {
+        "columns": [
+          "confirmed_by",
+          "pick_tasks"
+        ],
+        "rows": [
+          [
+            "RRU0001",
+            91
+          ],
+          [
+            "RRU0002",
+            83
+          ],
+          [
+            "RRU0003",
+            1
+          ],
+          [
+            "RRU0008",
+            84
+          ]
+        ]
+      },
+      "by_operator_id": {
+        "columns": [
+          "operator_id",
+          "pick_tasks"
+        ],
+        "rows": [
+          [
+            "OP-10721",
+            84
+          ],
+          [
+            "OP-51281",
+            91
+          ],
+          [
+            "OP-61296",
+            83
+          ],
+          [
+            "OP-91368",
+            1
+          ]
+        ]
+      }
+    },
+    "c101": {
+      "primary": {
+        "columns": [
+          "vstel",
+          "on_time_pgi_rate"
+        ],
+        "rows": [
+          [
+            "C100",
+            0.9611
+          ],
+          [
+            "C300",
+            0.9515
+          ],
+          [
+            "U100",
+            0.9583
+          ]
+        ]
+      }
+    },
+    "c102": {
+      "primary": {
+        "columns": [
+          "materials_over_180_days"
+        ],
+        "rows": [
+          [
+            65
+          ]
+        ]
+      },
+      "current_stock": {
+        "columns": [
+          "materials_over_180_days"
+        ],
+        "rows": [
+          [
+            66
+          ]
+        ]
+      }
+    },
+    "c103": {
+      "primary": {
+        "columns": [
+          "materials_below_14_days"
+        ],
+        "rows": [
+          [
+            8
+          ]
+        ]
+      },
+      "current_stock": {
+        "columns": [
+          "materials_below_14_days"
+        ],
+        "rows": [
+          [
+            8
+          ]
+        ]
+      }
+    },
+    "c104": {
+      "primary": {
+        "columns": [
+          "late_orders"
+        ],
+        "rows": [
+          [
+            39
+          ]
+        ]
+      }
+    },
+    "c108": {
+      "primary": {
+        "columns": [
+          "pick_tasks"
+        ],
+        "rows": [
+          [
+            786
+          ]
+        ]
+      }
+    },
+    "c109": {
+      "primary": {
+        "columns": [
+          "manufacturing_qty",
+          "transfer_qty",
+          "hub_demand_qty"
+        ],
+        "rows": [
+          [
+            "118136.000",
+            "23587.000",
+            "141723.000"
+          ]
+        ]
+      }
+    },
+    "c110": {
+      "primary": {
+        "columns": [
+          "shift",
+          "median_minutes"
+        ],
+        "rows": [
+          [
+            "A",
+            18.225
+          ]
+        ]
+      }
+    },
+    "c112": {
+      "primary": {
+        "columns": [
+          "vstel",
+          "on_time_pgi_rate"
+        ],
+        "rows": [
+          [
+            "C100",
+            0.9483
+          ],
+          [
+            "C300",
+            0.92
+          ],
+          [
+            "U100",
+            1.0
+          ]
+        ]
+      }
+    },
+    "c113": {
+      "primary": {
+        "columns": [
+          "start_qty",
+          "end_qty"
+        ],
+        "rows": [
+          [
+            "30588.000",
+            "30764.000"
+          ]
+        ]
+      }
+    },
+    "c114": {
+      "primary": {
+        "columns": [
+          "days_out_of_stock"
+        ],
+        "rows": [
+          [
+            0
+          ]
+        ]
+      }
+    },
+    "c116": {
+      "primary": {
+        "columns": [
+          "median_days_of_supply"
+        ],
+        "rows": [
+          [
+            112.00003360001008
+          ]
+        ]
+      }
+    },
+    "c105": {
+      "primary": {
+        "columns": [
+          "name1",
+          "open_lines",
+          "overdue_lines"
+        ],
+        "rows": [
+          [
+            "Hoshino RF Devices",
+            14,
+            2
+          ]
+        ]
+      }
+    },
+    "c106": {
+      "primary": {
+        "columns": [
+          "material",
+          "emergency_transfers",
+          "days_of_supply"
+        ],
+        "rows": [
+          [
+            "40000277",
+            11,
+            "3.73"
+          ]
+        ]
+      }
+    },
+    "c107": {
+      "primary": {
+        "columns": [
+          "rate_fy2026_p11",
+          "rate_fy2025_p11"
+        ],
+        "rows": [
+          [
+            0.9447,
+            0.9253
+          ]
+        ]
+      }
+    },
+    "c111": {
+      "primary": {
+        "columns": [
+          "land1",
+          "on_time_rate"
+        ],
+        "rows": [
+          [
+            "CN",
+            "0.8587"
+          ]
+        ]
+      }
+    },
+    "c117": {
+      "primary": {
+        "columns": [
+          "lgnum",
+          "median_minutes"
+        ],
+        "rows": [
+          [
+            "RR01",
+            46.216667
+          ],
+          [
+            "SZ01",
+            45.4666665
+          ]
+        ]
+      }
+    },
+    "c118": {
+      "primary": {
+        "columns": [
+          "median_minutes",
+          "p90_minutes"
+        ],
+        "rows": [
+          [
+            46.933333,
+            100.1133336
+          ]
+        ]
+      }
+    },
+    "c119": {
+      "primary": {
+        "columns": [
+          "autostore_putaways"
+        ],
+        "rows": [
+          [
+            145
+          ]
+        ]
+      }
+    },
+    "c120": {
+      "primary": {
+        "columns": [
+          "putaway_tasks"
+        ],
+        "rows": [
+          [
+            115
+          ]
+        ]
+      }
+    },
+    "c121": {
+      "primary": {
+        "columns": [
+          "autostore_products"
+        ],
+        "rows": [
+          [
+            276
+          ]
+        ]
+      }
+    },
+    "c122": {
+      "primary": {
+        "columns": [
+          "vendor_owned_items"
+        ],
+        "rows": [
+          [
+            483
+          ]
+        ]
+      }
+    },
+    "c123": {
+      "primary": {
+        "columns": [
+          "pick_tasks"
+        ],
+        "rows": [
+          [
+            262
+          ]
+        ]
+      }
+    },
+    "c124": {
+      "primary": {
+        "columns": [
+          "median_minutes"
+        ],
+        "rows": [
+          [
+            48.333333
+          ]
+        ]
+      }
+    },
+    "c125": {
+      "primary": {
+        "columns": [
+          "nltyp",
+          "median_minutes"
+        ],
+        "rows": [
+          [
+            "0010",
+            170.258333
+          ]
+        ]
+      }
+    },
+    "c126": {
+      "primary": {
+        "columns": [
+          "first_high_rack_putaway",
+          "putaways"
+        ],
+        "rows": [
+          [
+            "20260630",
+            35
+          ]
+        ]
+      }
+    },
+    "c127": {
+      "primary": {
+        "columns": [
+          "first_high_rack_putaway",
+          "putaways"
+        ],
+        "rows": [
+          [
+            "20260630",
+            35
+          ]
+        ]
+      }
+    },
+    "c128": {
+      "primary": {
+        "columns": [
+          "system_availability"
+        ],
+        "rows": [
+          [
+            "1.00000"
+          ]
+        ]
+      }
+    },
+    "c129": {
+      "primary": {
+        "columns": [
+          "port_id",
+          "port_availability"
+        ],
+        "rows": [
+          [
+            "AS-PORT-01",
+            "0.99890"
+          ],
+          [
+            "AS-PORT-02",
+            "0.99790"
+          ],
+          [
+            "AS-PORT-03",
+            "0.94727"
+          ],
+          [
+            "AS-PORT-04",
+            "0.99779"
+          ],
+          [
+            "AS-PORT-05",
+            "0.99793"
+          ],
+          [
+            "AS-PORT-06",
+            "0.99778"
+          ],
+          [
+            "AS-PORT-07",
+            "0.94706"
+          ],
+          [
+            "AS-PORT-08",
+            "0.99776"
+          ],
+          [
+            "AS-PORT-09",
+            "0.99784"
+          ],
+          [
+            "AS-PORT-10",
+            "0.99777"
+          ],
+          [
+            "AS-PORT-11",
+            "0.99878"
+          ],
+          [
+            "AS-PORT-12",
+            "0.99886"
+          ]
+        ]
+      }
+    },
+    "c130": {
+      "primary": {
+        "columns": [
+          "presentations",
+          "autostore_picks"
+        ],
+        "rows": [
+          [
+            2128,
+            2387
+          ]
+        ]
+      }
+    },
+    "c131": {
+      "primary": {
+        "columns": [
+          "port_id",
+          "presentations"
+        ],
+        "rows": [
+          [
+            "AS-PORT-02",
+            2038
+          ]
+        ]
+      }
+    },
+    "c132": {
+      "primary": {
+        "columns": [
+          "stops",
+          "top_reason"
+        ],
+        "rows": [
+          [
+            12,
+            "ROBOT_FAULT"
+          ]
+        ]
+      }
+    },
+    "c133": {
+      "primary": {
+        "columns": [
+          "presentations"
+        ],
+        "rows": [
+          [
+            108
+          ]
+        ]
+      }
+    },
+    "c134": {
+      "primary": {
+        "columns": [
+          "closed_hours"
+        ],
+        "rows": [
+          [
+            "125.98"
+          ]
+        ]
+      }
+    },
+    "c137": {
+      "primary": {
+        "columns": [
+          "stop_day",
+          "autostore_picks"
+        ],
+        "rows": [
+          [
+            "20260415",
+            106
+          ]
+        ]
+      }
+    },
+    "c135": {
+      "primary": {
+        "columns": [
+          "port_id",
+          "closed_from",
+          "closed_to"
+        ],
+        "rows": [
+          [
+            "AS-PORT-03",
+            "2026-03-30T06:30:00",
+            "2026-04-03T21:00:00"
+          ],
+          [
+            "AS-PORT-07",
+            "2026-03-30T06:30:00",
+            "2026-04-03T21:00:00"
+          ]
+        ]
+      }
+    },
+    "c136": {
+      "primary": {
+        "columns": [
+          "port_id",
+          "closed_from",
+          "closed_to"
+        ],
+        "rows": [
+          [
+            "AS-PORT-03",
+            "2026-03-30T06:30:00",
+            "2026-04-03T21:00:00"
+          ],
+          [
+            "AS-PORT-07",
+            "2026-03-30T06:30:00",
+            "2026-04-03T21:00:00"
+          ]
+        ]
+      }
+    },
+    "c138": {
+      "primary": {
+        "columns": [
+          "cage_exits"
+        ],
+        "rows": [
+          [
+            1
+          ]
+        ]
+      }
+    },
+    "c139": {
+      "primary": {
+        "columns": [
+          "reader_id",
+          "totes"
+        ],
+        "rows": [
+          [
+            "RR-DOCK-01",
+            9
+          ],
+          [
+            "RR-DOCK-02",
+            4
+          ]
+        ]
+      }
+    },
+    "c145": {
+      "primary": {
+        "columns": [
+          "zone",
+          "readers"
+        ],
+        "rows": [
+          [
+            "CAGE_EXIT",
+            1
+          ],
+          [
+            "DOCK",
+            2
+          ],
+          [
+            "PICK_EXIT",
+            3
+          ]
+        ]
+      }
+    },
+    "c140": {
+      "primary": {
+        "columns": [
+          "median_minutes"
+        ],
+        "rows": [
+          [
+            33.75
+          ]
+        ]
+      }
+    },
+    "c141": {
+      "primary": {
+        "columns": [
+          "late_share"
+        ],
+        "rows": [
+          [
+            "1.0000"
+          ]
+        ]
+      }
+    },
+    "c144": {
+      "primary": {
+        "columns": [
+          "local_day",
+          "loaded",
+          "left_storage"
+        ],
+        "rows": [
+          [
+            "2026-09-16",
+            2,
+            2
+          ]
+        ]
+      }
+    },
+    "c142": {
+      "primary": {
+        "columns": [
+          "procty",
+          "tasks"
+        ],
+        "rows": [
+          [
+            "2010",
+            6877
+          ],
+          [
+            "2020",
+            2466
+          ]
+        ]
+      }
+    },
+    "c143": {
+      "primary": {
+        "columns": [
+          "procty",
+          "tasks"
+        ],
+        "rows": [
+          [
+            "2010",
+            6877
+          ],
+          [
+            "2020",
+            2466
+          ]
+        ]
+      }
+    }
+  }
+}

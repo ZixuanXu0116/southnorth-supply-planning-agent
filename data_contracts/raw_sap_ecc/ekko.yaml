@@ -1,0 +1,28 @@
+table: raw_sap_ecc.ekko
+layer: raw
+source_system: SAP_ECC
+description: Purchasing document header (SAP table EKKO). Purchase orders to vendors for hub replenishment.
+grain: One row per client and purchase order.
+primary_key: [mandt, ebeln]
+domain: Procurement
+subdomain: Procurement/Purchase orders
+sensitivity: internal
+site_key: {column: bukrs, kind: organization}
+columns:
+  - {name: mandt, type: STRING, nullable: false, sap_type: CLNT3, comment: "SAP client."}
+  - {name: ebeln, type: STRING, nullable: false, sap_type: CHAR10, comment: "Purchase order number."}
+  - {name: bukrs, type: STRING, nullable: false, sap_type: CHAR4, comment: "Company code: 1000 US, 2000 China."}
+  - {name: bstyp, type: STRING, nullable: false, sap_type: CHAR1, comment: "Purchasing document category: F = purchase order."}
+  - {name: bsart, type: STRING, nullable: false, sap_type: CHAR4, comment: "Purchase order type: NB standard, ZEX expedited (emergency buy received the same day)."}
+  - {name: lifnr, type: STRING, nullable: false, sap_type: CHAR10, comment: "Vendor."}
+  - {name: ekorg, type: STRING, nullable: false, sap_type: CHAR4, comment: "Purchasing organization."}
+  - {name: waers, type: STRING, nullable: false, sap_type: CUKY5, comment: "Order currency."}
+  - {name: aedat, type: STRING, nullable: false, sap_type: DATS, comment: "Creation date (site-local)."}
+  - {name: ernam, type: STRING, nullable: false, sap_type: CHAR12, comment: "Created by (WF-BATCH = MRP conversion job)."}
+tests:
+  accepted_values:
+    - {column: bsart, values: [NB, ZEX]}
+    - {column: waers, values: [USD, CNY]}
+  relationships:
+    - {columns: [mandt, lifnr], references: raw_sap_ecc.lfa1, ref_columns: [mandt, lifnr]}
+access: [ops_analyst_global, site_manager_rr, site_manager_cn]

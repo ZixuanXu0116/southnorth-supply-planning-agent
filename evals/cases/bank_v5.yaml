@@ -1,0 +1,211 @@
+# Evaluation bank v5: bank v4 plus 8 cases on RFID tote tracking at Round Rock (c138-c145). Owner review pending.
+#
+# Needs generator 0.5.0. LTS reads are UTC; Round Rock business days are America/Chicago. Emergency picks are
+# partly confirmed late in EWM (trap 10); the knowledge base documents the RFID table but not the late
+# confirmations. Four of the eight new cases are in the locked test split.
+
+suite: bank_v5
+as_of: "2026-09-21"  # Monday, first day of FY2026 P12; ECC extracted 2026-09-21 05:00 UTC
+data_snapshot: {profile: small, generator_version: 0.8.0, seed: 20260924}
+includes: [bank_v4]
+
+cases:
+  # ---------------------------------------------------------------- ad hoc
+  - id: c138
+    question: How many totes left the Round Rock secure cage in fiscal period 11 of FY2026?
+    role: ops_analyst_global
+    category: adhoc
+    expected_behavior: answer
+    acceptable_behaviors: [answer, answer_with_assumption]
+    trap_tags: [timezone]
+    required_kb_docs: [guides/rfid_tracking.md, concepts/time_zones.md]
+    required_tables: [raw_ext.lts_rfid_scan]
+    notes: CAGE_EXIT reads by Round Rock local date (UTC converted to America/Chicago), 2026-08-24 to 2026-09-20.
+    reference_sql: |
+      SELECT COUNT(*) AS cage_exits
+      FROM raw_ext.lts_rfid_scan
+      WHERE zone = 'CAGE_EXIT'
+        AND to_date(from_utc_timestamp(scanned_at, 'America/Chicago')) BETWEEN DATE'2026-08-24' AND DATE'2026-09-20'
+    answer:
+      values: [{column: cage_exits, abs: 0}]
+
+  - id: c139
+    split: test
+    question: How many totes passed each Round Rock dock door in fiscal period 11 of FY2026?
+    role: ops_analyst_global
+    category: adhoc
+    expected_behavior: answer
+    trap_tags: [timezone, fiscal_calendar]
+    required_kb_docs: [guides/rfid_tracking.md, concepts/time_zones.md, concepts/fiscal_calendar.md]
+    required_tables: [raw_ext.lts_rfid_scan, raw_sap_ecc.t009b]
+    notes: >-
+      DOCK reads on Round Rock local dates 2026-08-24 to 2026-09-20. Since generator 0.8 the deliveries are
+      few and large (picking lists for manufacturing), so a single day may have no dock read at all.
+    reference_sql: |
+      SELECT reader_id, COUNT(*) AS totes
+      FROM raw_ext.lts_rfid_scan
+      WHERE zone = 'DOCK'
+        AND to_date(from_utc_timestamp(scanned_at, 'America/Chicago')) BETWEEN DATE'2026-08-24' AND DATE'2026-09-20'
+      GROUP BY reader_id
+    answer:
+      keys: [reader_id]
+      values: [{column: totes, abs: 0}]
+
+  # ---------------------------------------------------------------- unfamiliar
+  - id: c145
+    split: test
+    question: How many RFID readers does Round Rock have in each reader zone?
+    role: ops_analyst_global
+    category: unfamiliar
+    expected_behavior: answer
+    trap_tags: []
+    required_kb_docs: [guides/rfid_tracking.md]
+    required_tables: [raw_ext.lts_rfid_scan]
+    reference_sql: |
+      SELECT zone, COUNT(DISTINCT reader_id) AS readers
+      FROM raw_ext.lts_rfid_scan
+      GROUP BY zone
+    answer:
+      keys: [zone]
+      values: [{column: readers, abs: 0}]
+
+  # ---------------------------------------------------------------- traps: late confirmations (trap 10)
+  - id: c140
+    question: >-
+      What was the median time from warehouse-order creation to the physical pick for Round Rock emergency
+      picks in fiscal Q3 of FY2026?
+    role: ops_analyst_global
+    category: trap
+    expected_behavior: answer
+    acceptable_behaviors: [answer, answer_with_assumption]
+    trap_tags: [late_confirmation, cross_system_join]
+    required_kb_docs: [guides/rfid_tracking.md, metrics/pick_cycle_time.md]
+    required_tables: [raw_sap_ewm.scwm_ordim_c, raw_ext.lts_rfid_scan]
+    notes: >-
+      Physical pick = the tote's exit read (the last pick of the warehouse order). EWM confirmations of
+      emergency picks are often entered late, so the EWM-based duration is about twice as long.
+    reference_sql: |
+      WITH orders AS (
+        SELECT who, MIN(to_timestamp(cast(created_at AS STRING), 'yyyyMMddHHmmss')) AS created_utc,
+               MIN(substr(cast(created_at_wh AS STRING), 1, 8)) AS created_day
+        FROM raw_sap_ewm.scwm_ordim_c
+        WHERE lgnum = 'RR01' AND procty = '2020' AND tostat = 'C'
+        GROUP BY who
+      ),
+      exits AS (
+        SELECT who, scanned_at FROM raw_ext.lts_rfid_scan WHERE zone IN ('PICK_EXIT', 'CAGE_EXIT')
+      )
+      SELECT percentile((unix_timestamp(e.scanned_at) - unix_timestamp(o.created_utc)) / 60.0, 0.5)
+               AS median_minutes
+      FROM orders o JOIN exits e ON e.who = o.who
+      WHERE o.created_day BETWEEN '20260427' AND '20260726'
+    answer:
+      values: [{column: median_minutes, rel: 0.06, unit: minutes}]
+
+  - id: c141
+    split: test
+    question: >-
+      What share of Round Rock emergency warehouse orders in fiscal Q3 of FY2026 were confirmed in EWM more
+      than 10 minutes after their tote left the storage area?
+    role: ops_analyst_global
+    category: trap
+    expected_behavior: answer
+    acceptable_behaviors: [answer, answer_with_assumption]
+    trap_tags: [late_confirmation, timezone]
+    required_kb_docs: [guides/rfid_tracking.md]
+    required_tables: [raw_sap_ewm.scwm_ordim_c, raw_ext.lts_rfid_scan]
+    notes: Last EWM confirmation of the warehouse order (UTC) vs its exit read (UTC); orders by local creation date.
+    reference_sql: |
+      WITH orders AS (
+        SELECT who, MAX(to_timestamp(cast(confirmed_at AS STRING), 'yyyyMMddHHmmss')) AS last_confirmed,
+               MIN(substr(cast(created_at_wh AS STRING), 1, 8)) AS created_day
+        FROM raw_sap_ewm.scwm_ordim_c
+        WHERE lgnum = 'RR01' AND procty = '2020' AND tostat = 'C'
+        GROUP BY who
+      )
+      SELECT ROUND(AVG(CASE WHEN unix_timestamp(o.last_confirmed) - unix_timestamp(s.scanned_at) > 600
+                            THEN 1.0 ELSE 0.0 END), 4) AS late_share
+      FROM orders o
+      JOIN raw_ext.lts_rfid_scan s ON s.who = o.who AND s.zone IN ('PICK_EXIT', 'CAGE_EXIT')
+      WHERE o.created_day BETWEEN '20260427' AND '20260726'
+    answer:
+      values: [{column: late_share, abs: 0.01}]
+
+  # ---------------------------------------------------------------- multi-step
+  - id: c144
+    question: >-
+      On the day in fiscal period 11 of FY2026 when Round Rock loaded the most totes, how many totes were loaded
+      and how many left its storage area that day?
+    role: ops_analyst_global
+    category: multi_step
+    expected_behavior: answer
+    acceptable_behaviors: [answer, answer_with_assumption]
+    trap_tags: [timezone]
+    required_kb_docs: [guides/rfid_tracking.md, concepts/time_zones.md]
+    required_tables: [raw_ext.lts_rfid_scan]
+    notes: Local (America/Chicago) days; loaded = DOCK reads, left the storage area = PICK_EXIT and CAGE_EXIT reads.
+    reference_sql: |
+      WITH reads AS (
+        SELECT zone, to_date(from_utc_timestamp(scanned_at, 'America/Chicago')) AS local_day
+        FROM raw_ext.lts_rfid_scan
+      ),
+      daily AS (
+        SELECT local_day,
+               SUM(CASE WHEN zone = 'DOCK' THEN 1 ELSE 0 END) AS loaded,
+               SUM(CASE WHEN zone <> 'DOCK' THEN 1 ELSE 0 END) AS left_storage
+        FROM reads
+        WHERE local_day BETWEEN DATE'2026-08-24' AND DATE'2026-09-20'
+        GROUP BY local_day
+      )
+      SELECT local_day, loaded, left_storage
+      FROM daily
+      ORDER BY loaded DESC, local_day
+      LIMIT 1
+    answer:
+      values: [{column: loaded, abs: 0}, {column: left_storage, abs: 0}]
+
+  # ---------------------------------------------------------------- investigation: trap 10
+  - id: c142
+    question: >-
+      In EWM, Round Rock's emergency picks take about as long as regular picks even though they are rushed. Is
+      that real?
+    role: ops_analyst_global
+    category: investigation
+    expected_behavior: answer
+    acceptable_behaviors: [answer, answer_with_assumption]
+    trap_tags: [late_confirmation]
+    required_kb_docs: [guides/rfid_tracking.md, metrics/pick_cycle_time.md]
+    required_tables: [raw_sap_ewm.scwm_ordim_c, raw_ext.lts_rfid_scan]
+    notes: >-
+      No: the RFID exit reads show emergency orders are picked about twice as fast; many emergency picks are
+      confirmed in EWM well after the physical pick. The answer must use the RFID/LTS reads and name the late
+      confirmation. Documented-cause version (owner adjudication 2026-10-19): kb/guides/rfid_tracking.md
+      states that emergency picks are confirmed late and that pick speed is measured from the RFID exit read.
+    reference_sql: |
+      SELECT procty, COUNT(*) AS tasks
+      FROM raw_sap_ewm.scwm_ordim_c
+      WHERE lgnum = 'RR01' AND procty IN ('2010', '2020') AND tostat = 'C'
+      GROUP BY procty
+    answer:
+      must_mention: [[RFID, LTS], [confirmed late, late confirmation, confirmed later, delayed confirmation, confirmation delay, confirm late, confirmations lag, after the physical pick, after the pick]]
+
+  - id: c143
+    split: test
+    question: Can we trust EWM confirmation times to measure how fast emergency picks are done at Round Rock?
+    role: ops_analyst_global
+    category: investigation
+    expected_behavior: answer
+    acceptable_behaviors: [answer, answer_with_assumption]
+    trap_tags: [late_confirmation]
+    required_kb_docs: [guides/rfid_tracking.md, metrics/pick_cycle_time.md]
+    required_tables: [raw_sap_ewm.scwm_ordim_c, raw_ext.lts_rfid_scan]
+    notes: >-
+      Trap 10 without a hint in the question; the answer must use the RFID/LTS reads and name the late
+      confirmation. The cause is documented in kb/guides/rfid_tracking.md since 2026-10-19 (c142 adjudication).
+    reference_sql: |
+      SELECT procty, COUNT(*) AS tasks
+      FROM raw_sap_ewm.scwm_ordim_c
+      WHERE lgnum = 'RR01' AND procty IN ('2010', '2020') AND tostat = 'C'
+      GROUP BY procty
+    answer:
+      must_mention: [[RFID, LTS], [confirmed late, late confirmation, confirmed later, delayed confirmation, confirmation delay, confirm late, confirmations lag, after the physical pick, after the pick]]

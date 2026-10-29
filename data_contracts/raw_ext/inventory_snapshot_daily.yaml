@@ -1,0 +1,27 @@
+table: raw_ext.inventory_snapshot_daily
+layer: raw
+source_system: STOCK_EXTRACT
+description: Nightly stock snapshot by plant, storage location, material, and stock category, taken at site-local midnight at the end of SNAPSHOT_DATE. Only non-zero quantities are extracted. Quantities are in the base unit; values at standard price in local currency (vendor consignment has no value).
+grain: One row per snapshot date, plant, storage location, material, and stock category.
+primary_key: [snapshot_date, werks, lgort, matnr, stock_category]
+domain: Inventory
+subdomain: Inventory/Stock
+sensitivity: internal
+site_key: {column: werks, kind: plant}
+columns:
+  - {name: snapshot_date, type: DATE, nullable: false, comment: "Site-local business date the snapshot closes (taken at midnight after this date)."}
+  - {name: werks, type: STRING, nullable: false, sap_type: CHAR4, comment: "Plant."}
+  - {name: lgort, type: STRING, nullable: false, sap_type: CHAR4, comment: "Storage location."}
+  - {name: matnr, type: STRING, nullable: false, sap_type: CHAR18, comment: "Material number."}
+  - {name: stock_category, type: STRING, nullable: false, comment: "UNRESTRICTED, QUALITY (inspection), IN_TRANSFER (two-step transfer on the way to this storage location), CONSIGNMENT (vendor-owned)."}
+  - {name: quantity, type: "DECIMAL(15,3)", nullable: false, comment: "Quantity in base unit."}
+  - {name: meins, type: STRING, nullable: false, sap_type: UNIT3, comment: "Base unit of measure."}
+  - {name: stock_value, type: "DECIMAL(15,2)", nullable: false, comment: "Value at standard price in local currency; 0 for vendor consignment."}
+  - {name: waers, type: STRING, nullable: false, sap_type: CUKY5, comment: "Local currency (USD for US10, CNY for CN10)."}
+tests:
+  accepted_values:
+    - {column: stock_category, values: [UNRESTRICTED, QUALITY, IN_TRANSFER, CONSIGNMENT]}
+    - {column: werks, values: [US10, CN10]}
+  relationships:
+    - {columns: [matnr], references: raw_sap_ecc.mara, ref_columns: [matnr]}
+access: [ops_analyst_global, site_manager_rr, site_manager_cn]

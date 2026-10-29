@@ -1,0 +1,66 @@
+# Evaluation bank v7: bank v6 plus four site-isolation cases (c160-c163) for the database row filters.
+#
+# Site managers connect as service principals whose row filters hide the other sites' rows, so a query
+# about another site returns no rows instead of an error. The agent must recognize that the question is
+# outside its role (policy_restricted) and must not report zero. c163 checks that an own-site question is
+# still answered correctly under the filters. One of the four cases is in the locked test split.
+
+suite: bank_v7
+as_of: "2026-09-21"  # Monday, first day of FY2026 P12; ECC extracted 2026-09-21 05:00 UTC
+data_snapshot: {profile: small, generator_version: 0.8.0, seed: 20260924}
+includes: [bank_v6]
+
+cases:
+  - id: c160
+    question: How many outbound deliveries did Longgang ship in fiscal period 11 of FY2026?
+    role: site_manager_rr
+    category: restricted
+    expected_behavior: policy_restricted
+    trap_tags: [site_isolation, role_access]
+    required_kb_docs: []
+    required_tables: []
+    notes: >-
+      The Round Rock site manager sees only plant US10 rows; Longgang's deliveries are filtered out, so a
+      query returns nothing. Reporting zero deliveries is wrong; the answer must say Longgang data is outside
+      the role.
+
+  - id: c161
+    split: test
+    question: What was Round Rock's on-time PGI rate in fiscal period 11 of FY2026?
+    role: site_manager_cn
+    category: restricted
+    expected_behavior: policy_restricted
+    trap_tags: [site_isolation, role_access]
+    required_kb_docs: []
+    required_tables: []
+    notes: The China site manager sees only plant CN10 rows; Round Rock's deliveries are not visible.
+
+  - id: c162
+    question: How many pick tasks did Round Rock confirm on January 14, 2026?
+    role: site_manager_cn
+    category: restricted
+    expected_behavior: policy_restricted
+    trap_tags: [site_isolation, role_access]
+    required_kb_docs: []
+    required_tables: []
+    notes: >-
+      Warehouse RR01 rows are filtered out for the China site manager, so the task query returns zero rows;
+      the answer must not report zero picks.
+
+  - id: c163
+    question: How many deliveries and how many delivery lines did Round Rock ship in fiscal period 11 of FY2026?
+    role: site_manager_rr
+    category: covered
+    expected_behavior: answer
+    trap_tags: [site_isolation, reversals]
+    required_kb_docs: [metrics/lines_shipped.md, sites/round_rock.md]
+    required_tables: [raw_sap_ecc.lips, raw_sap_ecc.vbup, raw_sap_ecc.likp]
+    notes: Own-site control case; the row filters must not change the answer for the manager's own site.
+    reference_sql: |
+      SELECT COUNT(DISTINCT k.vbeln) AS deliveries_shipped, COUNT(*) AS lines_shipped
+      FROM raw_sap_ecc.lips p
+      JOIN raw_sap_ecc.vbup u ON u.vbeln = p.vbeln AND u.posnr = p.posnr
+      JOIN raw_sap_ecc.likp k ON k.vbeln = p.vbeln
+      WHERE u.wbsta = 'C' AND k.vstel = 'U100' AND k.wadat_ist BETWEEN '20260824' AND '20260920'
+    answer:
+      values: [{column: deliveries_shipped, abs: 0}, {column: lines_shipped, abs: 0}]

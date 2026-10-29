@@ -1,0 +1,71 @@
+# Unity Catalog metric view. `definition` is deployed as YAML 1.1 to <catalog>.semantic.<name>
+# (`snm-data build`); the other keys are project metadata: the roles that may query it and the
+# knowledge-base documents whose definitions it implements.
+name: mv_supply_position
+access: [ops_analyst_global, site_manager_rr, site_manager_cn, purchasing]
+kb: [metrics/projected_stock.md]
+definition:
+  version: 1.1
+  comment: >-
+    Daily supply projection per material and plant from the replenishment engine (one row per material,
+    plant, and day of the 91-day horizon, computed on the as-of date). Always filter as_of_date to one run and,
+    for a single material, group by day or filter day for a point in time: measures add up the rows selected.
+    projected_qty of one material on one day is its projected stock; shortage_days counts material-days below
+    zero; materials_short counts distinct materials with a projected shortage within the selected days.
+  source: "{catalog}.curated.supply_position"
+  dimensions:
+    - name: as_of_date
+      expr: as_of_date
+      comment: "Day the projection was computed for; filter to one run."
+    - name: day
+      expr: day
+      comment: "Projected day (site-local calendar date)."
+    - name: day_offset
+      expr: day_offset
+      comment: "Days after the as-of date (0 to 91)."
+    - name: site
+      expr: site
+      comment: "Hub site of the plant: Round Rock or Longgang."
+    - name: plant
+      expr: plant
+      comment: "Plant: US10 or CN10."
+    - name: material
+      expr: material
+      comment: "Material number without leading zeros."
+    - name: is_short
+      expr: projected_qty < 0
+      comment: "Projected stock below zero on that day."
+    - name: is_below_safety
+      expr: projected_qty < safety_stock_qty
+      comment: "Projected stock below safety stock on that day."
+  measures:
+    - name: projected_qty
+      expr: SUM(projected_qty)
+      comment: "Projected pooled stock of the main warehouse and its overflow hub at the end of the day (sum over the selected materials)."
+    - name: projected_main_qty
+      expr: SUM(projected_main_qty)
+      comment: "Projected stock of the main warehouse alone at the end of the day (sum over the selected materials)."
+    - name: on_hand_qty
+      expr: SUM(on_hand_qty)
+      comment: "Available stock at the main warehouse on the as-of date (sum over selected rows; filter to one day)."
+    - name: receipt_qty
+      expr: SUM(receipt_qty)
+      comment: "Open purchase order quantity expected on the selected days."
+    - name: firm_demand_qty
+      expr: SUM(firm_demand_qty)
+      comment: "Firm demand due on the selected days."
+    - name: forecast_qty
+      expr: SUM(forecast_qty)
+      comment: "Forecast demand on the selected days."
+    - name: shortage_days
+      expr: COUNT_IF(projected_qty < 0)
+      comment: "Material-days with projected stock below zero."
+    - name: materials_short
+      expr: COUNT(DISTINCT CASE WHEN projected_qty < 0 THEN material END)
+      comment: "Materials with a projected shortage on any selected day."
+    - name: materials_below_safety
+      expr: COUNT(DISTINCT CASE WHEN projected_qty < safety_stock_qty THEN material END)
+      comment: "Materials below safety stock on any selected day."
+    - name: materials
+      expr: COUNT(DISTINCT material)
+      comment: "Materials selected."

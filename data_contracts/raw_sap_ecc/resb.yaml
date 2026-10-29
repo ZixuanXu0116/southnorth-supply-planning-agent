@@ -1,0 +1,37 @@
+table: raw_sap_ecc.resb
+layer: raw
+source_system: SAP_ECC
+description: >-
+  Reservations and dependent requirements (SAP table RESB) for components at the production supply storage
+  location 2100. Requirement type SB rows belong to released production orders (AUFNR) and are firm demand;
+  AR rows are dependent requirements of planned orders (PLNUM) from the MRP run at the extraction and are
+  forecast. ENMNG is the quantity withdrawn (consumed with movement type 261); an SB row whose requirement
+  date has passed with ENMNG below BDMNG is manufacturing backlog.
+grain: One row per client, reservation number, and item.
+primary_key: [mandt, rsnum, rspos]
+domain: Manufacturing
+subdomain: Manufacturing/Component requirements
+sensitivity: internal
+site_key: {column: werks, kind: plant}
+columns:
+  - {name: mandt, type: STRING, nullable: false, sap_type: CLNT3, comment: "SAP client."}
+  - {name: rsnum, type: STRING, nullable: false, sap_type: NUMC10, comment: "Reservation number (one per production order or planned order)."}
+  - {name: rspos, type: STRING, nullable: false, sap_type: NUMC4, comment: "Reservation item."}
+  - {name: bdart, type: STRING, nullable: false, sap_type: CHAR2, comment: "Requirement type: SB = order reservation (production order, firm), AR = dependent requirement (planned order, forecast)."}
+  - {name: xloek, type: STRING, nullable: false, sap_type: CHAR1, comment: "Deletion indicator (X = deleted)."}
+  - {name: kzear, type: STRING, nullable: false, sap_type: CHAR1, comment: "Final issue indicator (X = fully withdrawn)."}
+  - {name: matnr, type: STRING, nullable: false, sap_type: CHAR18, comment: "Component material number."}
+  - {name: werks, type: STRING, nullable: false, sap_type: CHAR4, comment: "Plant."}
+  - {name: lgort, type: STRING, nullable: false, sap_type: CHAR4, comment: "Storage location of the requirement: 2100 (production supply)."}
+  - {name: bdter, type: STRING, nullable: false, sap_type: DATS, comment: "Requirement date (the order's start date)."}
+  - {name: bdmng, type: "DECIMAL(13,3)", nullable: false, sap_type: QUAN13_3, comment: "Requirement quantity in base unit."}
+  - {name: meins, type: STRING, nullable: false, sap_type: UNIT3, comment: "Base unit."}
+  - {name: enmng, type: "DECIMAL(13,3)", nullable: false, sap_type: QUAN13_3, comment: "Quantity withdrawn so far (movement type 261)."}
+  - {name: aufnr, type: STRING, nullable: false, sap_type: CHAR12, comment: "Production order (SB rows); blank for dependent requirements."}
+  - {name: plnum, type: STRING, nullable: false, sap_type: CHAR10, comment: "Planned order (AR rows); blank for order reservations."}
+  - {name: xwaok, type: STRING, nullable: false, sap_type: CHAR1, comment: "Goods movement allowed (X for released production orders)."}
+tests:
+  accepted_values:
+    - {column: bdart, values: [SB, AR]}
+    - {column: lgort, values: ["2100"]}
+access: [ops_analyst_global, site_manager_rr, site_manager_cn, purchasing]

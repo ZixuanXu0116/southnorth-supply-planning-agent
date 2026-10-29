@@ -1,0 +1,21 @@
+table: raw_ext.autostore_port_status
+layer: raw
+source_system: AUTOSTORE
+description: Status history of the AutoStore ports at Longgang as a complete timeline of OPEN and CLOSED intervals per port. Timestamps are Longgang local time (Asia/Shanghai) without an offset; the current interval has no end.
+grain: One row per port and status interval.
+primary_key: [port_id, valid_from]
+domain: Automation
+subdomain: Automation/AutoStore
+sensitivity: internal
+site_scope: CN10
+columns:
+  - {name: port_id, type: STRING, nullable: false, comment: "Port identifier (AS-PORT-01 to AS-PORT-12)."}
+  - {name: status, type: STRING, nullable: false, comment: "OPEN or CLOSED."}
+  - {name: valid_from, type: TIMESTAMP_NTZ, nullable: false, comment: "Interval start (Longgang local time)."}
+  - {name: valid_to, type: TIMESTAMP_NTZ, nullable: true, comment: "Interval end (Longgang local time); null for the current interval."}
+  - {name: reason, type: STRING, nullable: false, comment: "Reason for a closure: MAINTENANCE or FAULT; blank when open."}
+tests:
+  accepted_values:
+    - {column: status, values: [OPEN, CLOSED]}
+    - {column: reason, values: ["", MAINTENANCE, FAULT]}
+access: [ops_analyst_global, site_manager_cn]

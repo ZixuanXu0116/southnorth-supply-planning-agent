@@ -1,0 +1,17 @@
+{
+  "description": "Local additions to the PI model catalog for models released after the pinned PI version. Each entry copies a base catalog model (API, compatibility flags, prompt-cache TTLs) and overrides the listed fields. Remove an entry once the pinned PI release ships the model; a test fails while both define it.",
+  "models": [
+    {
+      "provider": "anthropic",
+      "id": "claude-sonnet-5-5",
+      "base": "claude-sonnet-5",
+      "source": "Anthropic Models API and pricing page, checked 2026-09-28",
+      "overrides": {
+        "name": "Claude Sonnet 5.5",
+        "cost": { "input": 2, "output": 10, "cacheRead": 0.2, "cacheWrite": 2.5 },
+        "contextWindow": 1000000,
+        "maxTokens": 128000
+      }
+    }
+  ]
+}

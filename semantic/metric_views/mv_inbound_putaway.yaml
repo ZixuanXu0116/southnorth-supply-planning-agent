@@ -1,0 +1,69 @@
+# Unity Catalog metric view. `definition` is deployed as YAML 1.1 to <catalog>.semantic.<name>
+# (`snm-data build`); the other keys are project metadata: the roles that may query it and the
+# knowledge-base documents whose definitions it implements.
+name: mv_inbound_putaway
+access: [ops_analyst_global, site_manager_rr, site_manager_cn]
+kb: [metrics/dock_to_stock_time.md]
+definition:
+  version: 1.1
+  comment: >-
+    Inbound delivery items received into the EWM warehouses of Round Rock (RR01) and Longgang (SZ01), by site-local
+    goods receipt day: item counts and dock-to-stock time (goods receipt to confirmed putaway, in minutes). Items
+    not yet put away are counted as open and are not in the time measures. Dongguan has no inbound deliveries.
+  source: "{catalog}.curated.fct_inbound_putaway"
+  dimensions:
+    - name: site
+      expr: site
+      comment: "Round Rock or Longgang."
+    - name: warehouse
+      expr: warehouse
+      comment: "EWM warehouse: RR01 or SZ01."
+    - name: receipt_type
+      expr: receipt_type
+      comment: "standard or expedited."
+    - name: stock_category
+      expr: stock_category
+      comment: "unrestricted or quality_inspection."
+    - name: destination_storage_type
+      expr: destination_storage_type
+      comment: "Storage type the item was put away to."
+    - name: material
+      expr: material
+      comment: "Material number without leading zeros."
+    - name: is_put_away
+      expr: is_put_away
+      comment: "Putaway confirmed."
+    - name: received_local_date
+      expr: received_local_date
+      comment: "Goods receipt day in the warehouse time zone; filter with a range for calendar periods."
+    - name: fiscal_year
+      expr: fiscal_year
+      comment: "Fiscal year of the receipt day."
+    - name: fiscal_quarter
+      expr: fiscal_quarter
+      comment: "Fiscal quarter (1-4) of the receipt day."
+    - name: fiscal_period
+      expr: fiscal_period
+      comment: "Fiscal period (1-12) of the receipt day."
+    - name: fiscal_week
+      expr: fiscal_week
+      comment: "Fiscal week (1-53, Monday to Sunday) of the receipt day."
+  measures:
+    - name: items_received
+      expr: COUNT(1)
+      comment: "Inbound delivery items received."
+    - name: items_put_away
+      expr: COUNT_IF(is_put_away)
+      comment: "Items with a confirmed putaway."
+    - name: open_putaways
+      expr: COUNT_IF(NOT is_put_away)
+      comment: "Items received but not yet put away."
+    - name: received_qty
+      expr: SUM(quantity)
+      comment: "Received quantity in base units."
+    - name: median_dock_to_stock_minutes
+      expr: percentile(dock_to_stock_minutes, 0.5)
+      comment: "Median minutes from goods receipt to confirmed putaway."
+    - name: p90_dock_to_stock_minutes
+      expr: percentile(dock_to_stock_minutes, 0.9)
+      comment: "90th percentile of minutes from goods receipt to confirmed putaway."

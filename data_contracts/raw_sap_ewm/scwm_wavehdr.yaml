@@ -1,0 +1,29 @@
+table: raw_sap_ewm.scwm_wavehdr
+layer: raw
+source_system: SAP_EWM
+description: Wave headers (EWM table /SCWM/WAVEHDR). Timestamp fields are DEC15 values (YYYYMMDDhhmmss) in UTC; *_WH fields are in the warehouse time zone; 0 means not reached.
+grain: One row per client, warehouse number, and wave.
+primary_key: [mandt, lgnum, wave]
+domain: Outbound
+subdomain: Outbound/Picking
+sensitivity: internal
+site_key: {column: lgnum, kind: warehouse}
+columns:
+  - {name: mandt, type: STRING, nullable: false, sap_type: CLNT3, comment: "SAP client."}
+  - {name: lgnum, type: STRING, nullable: false, sap_type: CHAR4, comment: "Warehouse number."}
+  - {name: wave, type: STRING, nullable: false, sap_type: NUMC10, comment: "Wave number."}
+  - {name: wave_type, type: STRING, nullable: false, sap_type: CHAR4, comment: "Wave type: OUTB = outbound picking wave."}
+  - {name: tmplt, type: STRING, nullable: false, sap_type: CHAR10, comment: "Wave template that scheduled the wave."}
+  - {name: status, type: STRING, nullable: false, sap_type: CHAR1, comment: "Wave status in this dataset: R = released (work open), C = completed."}
+  - {name: rls_dt, type: "DECIMAL(15,0)", nullable: false, sap_type: DEC15, comment: "Planned release timestamp (UTC)."}
+  - {name: released_at, type: "DECIMAL(15,0)", nullable: false, sap_type: DEC15, comment: "Actual release timestamp (UTC)."}
+  - {name: released_at_wh, type: "DECIMAL(15,0)", nullable: false, sap_type: DEC15, comment: "Actual release timestamp in the warehouse time zone."}
+  - {name: released_by, type: STRING, nullable: false, sap_type: CHAR12, comment: "User or job that released the wave."}
+  - {name: cutoff_dt, type: "DECIMAL(15,0)", nullable: false, sap_type: DEC15, comment: "Planned completion cutoff timestamp (UTC)."}
+  - {name: pick_comp_dt, type: "DECIMAL(15,0)", nullable: false, sap_type: DEC15, comment: "Timestamp when all picks were completed (UTC); 0 if not completed."}
+  - {name: load_comp_dt, type: "DECIMAL(15,0)", nullable: false, sap_type: DEC15, comment: "Timestamp when loading was completed (UTC); 0 if not completed."}
+tests:
+  accepted_values:
+    - {column: wave_type, values: [OUTB]}
+    - {column: status, values: [R, C]}
+access: [ops_analyst_global, site_manager_rr, site_manager_cn]

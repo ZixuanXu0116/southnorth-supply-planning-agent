@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Ask{% endblock %}
+{% block content %}
+<h1>Ask the data agent</h1>
+{% if missing %}
+<div class="error">Not set in the terminal that started the page: {{ missing | join(", ") }}. Stop the page, run
+  <code>set -a; source ~/.config/snm/env; set +a</code>, and start it again.</div>
+{% endif %}
+<div class="card">
+  <form class="ask" method="post" action="/ask">
+    <div class="row">
+      <div><label for="role">Role (what the agent may see)</label>
+        <select id="role" name="role">
+          {% for key, label in roles.items() %}<option value="{{ key }}" {% if key == role %}selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select></div>
+      <div><label for="as_of">As of (the agent's "today")</label>
+        <input id="as_of" name="as_of" value="{{ as_of }}" pattern="\d{4}-\d{2}-\d{2}"></div>
+    </div>
+    <label for="question">Question (in English)</label>
+    <textarea id="question" name="question" maxlength="2000" required
+      placeholder="How many lines were shipped from Round Rock last week?"></textarea>
+    <button type="submit">Ask</button><span class="running">The agent is working; this can take a few minutes.</span>
+  </form>
+  <p class="muted">Each question costs real API money (about USD 0.05 on average, at most USD 0.75). Follow-ups re-ask the
+    thread's earlier questions, so they cost more.</p>
+</div>
+
+{% if threads %}
+<div class="card">
+  <h2>Earlier threads</h2>
+  <table>
+    <tr><th>Started</th><th>Role</th><th>First question</th><th class="num">Questions</th><th class="num">Cost USD</th></tr>
+    {% for thread in threads %}
+    <tr>
+      <td class="muted">{{ thread.created_at[:16] | replace("T", " ") }}</td>
+      <td>{{ thread.role }}</td>
+      <td><a href="/thread/{{ thread.id }}">{{ thread.turns[0].question | truncate(90) if thread.turns else "(empty)" }}</a>
+        {% if thread.turns | selectattr("flag") | list %}<span class="tag no">flagged</span>{% endif %}</td>
+      <td class="num">{{ thread.turns | length }}</td>
+      <td class="num">{{ "%.3f" | format(thread.turns | sum(attribute="cost_usd")) }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endif %}
+{% endblock %}

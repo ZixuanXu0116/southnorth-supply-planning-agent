@@ -1,0 +1,188 @@
+{
+  "suite": "followup_v1",
+  "as_of": "2026-09-21",
+  "data_snapshot": {
+    "profile": "small",
+    "generator_version": "0.8.0",
+    "seed": 20260924
+  },
+  "computed_at": "2026-10-19T20:06:25+00:00",
+  "results": {
+    "f01": {
+      "primary": {
+        "columns": [
+          "vstel",
+          "lines_shipped"
+        ],
+        "rows": [
+          [
+            "C100",
+            4235
+          ],
+          [
+            "C300",
+            786
+          ]
+        ]
+      }
+    },
+    "f02": {
+      "primary": {
+        "columns": [
+          "lgnum",
+          "median_minutes"
+        ],
+        "rows": [
+          [
+            "RR01",
+            51.6
+          ],
+          [
+            "SZ01",
+            9.399999999999999
+          ]
+        ]
+      }
+    },
+    "f04": {
+      "primary": {
+        "columns": [
+          "vstel",
+          "rate_change"
+        ],
+        "rows": [
+          [
+            "C100",
+            "-0.0064"
+          ],
+          [
+            "C300",
+            "0.0016"
+          ],
+          [
+            "U100",
+            "0.1364"
+          ]
+        ]
+      }
+    },
+    "f05": {
+      "primary": {
+        "columns": [
+          "vstel",
+          "lines_per_delivery"
+        ],
+        "rows": [
+          [
+            "C100",
+            19.698
+          ],
+          [
+            "C300",
+            3.95
+          ]
+        ]
+      }
+    },
+    "f06": {
+      "primary": {
+        "columns": [
+          "available_qty"
+        ],
+        "rows": [
+          [
+            "8446.000"
+          ]
+        ]
+      }
+    },
+    "f07": {
+      "primary": {
+        "columns": [
+          "vstel",
+          "on_time_pgi_rate"
+        ],
+        "rows": [
+          [
+            "C300",
+            0.9599
+          ]
+        ]
+      }
+    },
+    "f09": {
+      "primary": {
+        "columns": [
+          "cancelled_pick_tasks"
+        ],
+        "rows": [
+          [
+            7
+          ]
+        ]
+      }
+    },
+    "f10": {
+      "primary": {
+        "columns": [
+          "vstel",
+          "deliveries_shipped"
+        ],
+        "rows": [
+          [
+            "C100",
+            59
+          ],
+          [
+            "C300",
+            51
+          ],
+          [
+            "U100",
+            3
+          ]
+        ]
+      }
+    },
+    "f11": {
+      "primary": {
+        "columns": [
+          "stop_minutes"
+        ],
+        "rows": [
+          [
+            "18.0"
+          ]
+        ]
+      }
+    },
+    "f12": {
+      "primary": {
+        "columns": [
+          "available_qty"
+        ],
+        "rows": [
+          [
+            "298.000"
+          ]
+        ]
+      }
+    },
+    "f13": {
+      "primary": {
+        "columns": [
+          "name1",
+          "open_lines",
+          "overdue_lines"
+        ],
+        "rows": [
+          [
+            "Hoshino RF Devices",
+            14,
+            2
+          ]
+        ]
+      }
+    }
+  }
+}

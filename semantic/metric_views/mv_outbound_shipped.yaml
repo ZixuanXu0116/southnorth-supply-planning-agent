@@ -1,0 +1,60 @@
+# Unity Catalog metric view. `definition` is deployed as YAML 1.1 to <catalog>.semantic.<name>
+# (`snm-data build`); the other keys are project metadata: the roles that may query it and the
+# knowledge-base documents whose definitions it implements.
+name: mv_outbound_shipped
+access: [ops_analyst_global, site_manager_rr, site_manager_cn]
+kb: [metrics/lines_shipped.md, metrics/wave_to_pgi_lead_time.md]
+definition:
+  version: 1.1
+  comment: >-
+    Shipped outbound deliveries and delivery lines (picking lists of production orders issued to the manufacturing
+    department's production supply area), by actual goods issue date (shipping-point local date). A line
+    is shipped when its goods movement status is complete (VBUP.WBSTA = 'C'), so reversals and re-postings count
+    once. Also the wave-to-PGI lead time (wave release in EWM to the final goods issue posting in ECC, both in
+    UTC). Use mv_outbound_due for the on-time PGI rate and mv_outbound_pod for proof-of-delivery metrics.
+  source: "{catalog}.curated.fct_outbound_delivery"
+  filter: is_gi_posted AND shipped_lines > 0
+  dimensions:
+    - name: site
+      expr: site
+      comment: "Shipping site: Round Rock, Longgang, or Dongguan."
+    - name: shipping_point
+      expr: shipping_point
+      comment: "Shipping point: U100 Round Rock, C100 Longgang, C300 Dongguan."
+    - name: warehouse
+      expr: warehouse
+      comment: "EWM warehouse: RR01 Round Rock, SZ01 Longgang, DG01 Dongguan."
+    - name: work_center
+      expr: work_center
+      comment: "Receiving work center of the manufacturing department (there are no external customers)."
+    - name: gi_date
+      expr: actual_gi_date
+      comment: "Actual goods issue date (shipping-point local date); filter with a range for calendar months or weeks."
+    - name: fiscal_year
+      expr: gi_fiscal_year
+      comment: "Fiscal year of the actual goods issue date."
+    - name: fiscal_quarter
+      expr: gi_fiscal_quarter
+      comment: "Fiscal quarter (1-4) of the actual goods issue date."
+    - name: fiscal_period
+      expr: gi_fiscal_period
+      comment: "Fiscal period (1-12) of the actual goods issue date."
+    - name: fiscal_week
+      expr: gi_fiscal_week
+      comment: "Fiscal week (1-53, Monday to Sunday) of the actual goods issue date."
+  measures:
+    - name: deliveries_shipped
+      expr: COUNT(1)
+      comment: "Deliveries with at least one shipped line."
+    - name: lines_shipped
+      expr: SUM(shipped_lines)
+      comment: "Shipped delivery lines (items with goods movement status complete)."
+    - name: lines_per_delivery
+      expr: try_divide(SUM(shipped_lines), COUNT(1))
+      comment: "Average shipped lines per shipped delivery."
+    - name: median_wave_to_pgi_minutes
+      expr: percentile(wave_to_pgi_minutes, 0.5)
+      comment: "Median minutes from wave release to the final goods issue posting."
+    - name: p90_wave_to_pgi_minutes
+      expr: percentile(wave_to_pgi_minutes, 0.9)
+      comment: "90th percentile of minutes from wave release to the final goods issue posting."

@@ -1,0 +1,33 @@
+table: curated.fct_inbound_putaway
+layer: curated
+materialization: view
+depends_on: [raw_sap_ewm.scwm_ordim_c, raw_sap_ewm.scdl_db_proci_i, raw_sap_ewm.scdl_db_proch_i, curated.dim_date]
+description: Inbound delivery items received into the EWM warehouses of Round Rock and Longgang, with the goods receipt time (creation of the first putaway task, UTC), the site-local receipt day, the confirmed putaway if any, the destination storage type, and the dock-to-stock time. Dongguan has no inbound deliveries in the extract.
+grain: One row per inbound delivery item.
+primary_key: [warehouse, inbound_delivery, item]
+domain: Inbound
+subdomain: Inbound/Putaway
+sensitivity: internal
+columns:
+  - {name: warehouse, type: STRING, nullable: false, comment: "EWM warehouse: RR01 Round Rock or SZ01 Longgang."}
+  - {name: site, type: STRING, nullable: false, comment: "Site of the warehouse: Round Rock or Longgang."}
+  - {name: inbound_delivery, type: STRING, nullable: false, comment: "EWM inbound delivery number."}
+  - {name: item, type: STRING, nullable: false, comment: "Inbound delivery item number."}
+  - {name: receipt_type, type: STRING, nullable: false, comment: "standard (INB) or expedited (INBX)."}
+  - {name: material, type: STRING, nullable: false, comment: "Material number without leading zeros."}
+  - {name: quantity, type: "DECIMAL(31,14)", nullable: false, comment: "Received quantity in the base unit."}
+  - {name: unit, type: STRING, nullable: false, comment: "Base unit of measure."}
+  - {name: stock_category, type: STRING, nullable: false, comment: "Stock type at receipt: unrestricted or quality_inspection."}
+  - {name: received_at, type: TIMESTAMP, nullable: false, comment: "Goods receipt: creation of the first putaway task (UTC)."}
+  - {name: received_local_date, type: DATE, nullable: false, comment: "Goods receipt day in the warehouse time zone."}
+  - {name: stored_at, type: TIMESTAMP, comment: "Confirmation of the putaway (UTC); NULL while the item is still open."}
+  - {name: is_put_away, type: BOOLEAN, nullable: false, comment: "Putaway confirmed."}
+  - {name: destination_storage_type, type: STRING, comment: "Storage type the item was put away to."}
+  - {name: putaway_tasks, type: BIGINT, nullable: false, comment: "Putaway tasks created for the item (cancelled ones included)."}
+  - {name: cancelled_tasks, type: BIGINT, nullable: false, comment: "Cancelled putaway tasks of the item."}
+  - {name: dock_to_stock_minutes, type: DOUBLE, comment: "Minutes from goods receipt to the confirmed putaway."}
+  - {name: fiscal_year, type: INT, comment: "Fiscal year of the receipt day."}
+  - {name: fiscal_quarter, type: INT, comment: "Fiscal quarter of the receipt day."}
+  - {name: fiscal_period, type: INT, comment: "Fiscal period of the receipt day."}
+  - {name: fiscal_week, type: INT, comment: "Fiscal week of the receipt day."}
+access: []

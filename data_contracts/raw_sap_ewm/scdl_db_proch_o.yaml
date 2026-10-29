@@ -1,0 +1,24 @@
+table: raw_sap_ewm.scdl_db_proch_o
+layer: raw
+source_system: SAP_EWM
+description: Outbound delivery order headers in EWM (table /SCDL/DB_PROCH_O, simplified). Created when the ECC delivery is replicated to EWM.
+grain: One row per client and outbound delivery order.
+primary_key: [mandt, docid]
+domain: Outbound
+subdomain: Outbound/Shipping
+sensitivity: internal
+site_key: {column: lgnum, kind: warehouse}
+columns:
+  - {name: mandt, type: STRING, nullable: false, sap_type: CLNT3, comment: "SAP client."}
+  - {name: docid, type: STRING, nullable: false, sap_type: RAW16, comment: "Document GUID."}
+  - {name: docno, type: STRING, nullable: false, sap_type: CHAR35, comment: "EWM document number."}
+  - {name: doccat, type: STRING, nullable: false, sap_type: CHAR3, comment: "Document category: PDO = outbound delivery order."}
+  - {name: doctype, type: STRING, nullable: false, sap_type: CHAR4, comment: "Document type."}
+  - {name: lgnum, type: STRING, nullable: false, sap_type: CHAR4, comment: "Warehouse number (simplified; the standard table stores the warehouse in a separate field)."}
+  - {name: cretst, type: "DECIMAL(15,0)", nullable: false, sap_type: DEC15, comment: "Creation timestamp (UTC)."}
+  - {name: creusr, type: STRING, nullable: false, sap_type: CHAR12, comment: "Creating user."}
+tests:
+  unique: [[mandt, docno]]
+  accepted_values:
+    - {column: doccat, values: [PDO]}
+access: [ops_analyst_global, site_manager_rr, site_manager_cn]

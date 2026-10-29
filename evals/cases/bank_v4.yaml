@@ -1,0 +1,230 @@
+# Evaluation bank v4: bank v3 plus 10 cases on AutoStore controller logs and scenario A1 (c128-c137).
+# Owner review pending.
+#
+# Needs generator 0.4.0. The controller logs local time (Asia/Shanghai) without an offset; EWM is UTC.
+# Same conventions as seed.yaml; four of the ten new cases are in the locked test split.
+
+suite: bank_v4
+as_of: "2026-09-21"  # Monday, first day of FY2026 P12; ECC extracted 2026-09-21 05:00 UTC
+data_snapshot: {profile: small, generator_version: 0.8.0, seed: 20260924}
+includes: [bank_v3]
+
+cases:
+  # ---------------------------------------------------------------- covered: availability
+  - id: c128
+    question: What was the AutoStore system availability at Longgang in fiscal period 11 of FY2026?
+    role: ops_analyst_global
+    category: covered
+    expected_behavior: answer
+    acceptable_behaviors: [answer, answer_with_assumption]
+    trap_tags: [timezone, metric_definition]
+    required_kb_docs: [metrics/autostore_availability.md, guides/autostore.md]
+    required_tables: [raw_ext.autostore_system_status]
+    notes: 1 - stopped minutes / calendar minutes, 2026-08-24 00:00 to 2026-09-21 00:00 Longgang local.
+    reference_sql: |
+      SELECT ROUND(1 - COALESCE(SUM((unix_timestamp(LEAST(ended_at, TIMESTAMP_NTZ'2026-09-21 00:00:00'))
+                                     - unix_timestamp(GREATEST(started_at, TIMESTAMP_NTZ'2026-08-24 00:00:00')))
+                                    / 60.0), 0) / (28 * 24 * 60), 5) AS system_availability
+      FROM raw_ext.autostore_system_status
+      WHERE started_at < TIMESTAMP_NTZ'2026-09-21 00:00:00' AND ended_at > TIMESTAMP_NTZ'2026-08-24 00:00:00'
+    answer:
+      values: [{column: system_availability, abs: 0.0005}]
+
+  - id: c129
+    split: test
+    question: What was the availability of each AutoStore port at Longgang in fiscal Q2 of FY2026?
+    role: ops_analyst_global
+    category: covered
+    expected_behavior: answer
+    acceptable_behaviors: [answer, answer_with_assumption]
+    trap_tags: [open_intervals, metric_definition, fiscal_calendar]
+    required_kb_docs: [metrics/autostore_availability.md, guides/autostore.md, concepts/fiscal_calendar.md]
+    required_tables: [raw_ext.autostore_port_status]
+    notes: FY2026 Q2 = 2026-01-26 to 2026-04-26 (91 days) local; OPEN share per port, intervals clipped to the quarter.
+    reference_sql: |
+      SELECT port_id,
+             ROUND(SUM((unix_timestamp(LEAST(COALESCE(valid_to, TIMESTAMP_NTZ'2026-09-21 22:00:00'),
+                                             TIMESTAMP_NTZ'2026-04-27 00:00:00'))
+                        - unix_timestamp(GREATEST(valid_from, TIMESTAMP_NTZ'2026-01-26 00:00:00'))) / 60.0)
+                   / (91 * 24 * 60), 5) AS port_availability
+      FROM raw_ext.autostore_port_status
+      WHERE status = 'OPEN' AND valid_from < TIMESTAMP_NTZ'2026-04-27 00:00:00'
+        AND COALESCE(valid_to, TIMESTAMP_NTZ'2026-09-21 22:00:00') > TIMESTAMP_NTZ'2026-01-26 00:00:00'
+      GROUP BY port_id
+    answer:
+      keys: [port_id]
+      values: [{column: port_availability, abs: 0.001}]
+
+  # ---------------------------------------------------------------- ad hoc
+  - id: c130
+    question: >-
+      How many AutoStore bin presentations were there at Longgang in fiscal period 11 of FY2026, and how many
+      picks were done at the AutoStore ports in that period?
+    role: ops_analyst_global
+    category: adhoc
+    expected_behavior: answer
+    acceptable_behaviors: [answer, answer_with_assumption]
+    trap_tags: [presentations_vs_picks, timezone]
+    required_kb_docs: [guides/autostore.md, metrics/pick_cycle_time.md]
+    required_tables: [raw_ext.autostore_bin_presentation, raw_sap_ewm.scwm_ordim_c]
+    notes: >-
+      All presentations (picks and decanting) by local date; picks = confirmed tasks from AS01 by local
+      confirmation date. One presentation can serve several picks.
+    reference_sql: |
+      SELECT
+        (SELECT COUNT(*) FROM raw_ext.autostore_bin_presentation
+         WHERE presented_at >= TIMESTAMP_NTZ'2026-08-24 00:00:00'
+           AND presented_at < TIMESTAMP_NTZ'2026-09-21 00:00:00') AS presentations,
+        (SELECT COUNT(*) FROM raw_sap_ewm.scwm_ordim_c
+         WHERE lgnum = 'SZ01' AND vltyp = 'AS01' AND tostat = 'C' AND procty IN ('2010', '2020')
+           AND substr(cast(confirmed_at_wh AS STRING), 1, 8) BETWEEN '20260824' AND '20260920') AS autostore_picks
+    answer:
+      values: [{column: presentations, rel: 0.01}, {column: autostore_picks, rel: 0.01}]
+
+  - id: c131
+    split: test
+    question: Which AutoStore port at Longgang handled the most bin presentations so far in fiscal year 2026?
+    role: ops_analyst_global
+    category: adhoc
+    expected_behavior: answer
+    trap_tags: [timezone]
+    required_kb_docs: [guides/autostore.md]
+    required_tables: [raw_ext.autostore_bin_presentation]
+    reference_sql: |
+      SELECT port_id, COUNT(*) AS presentations
+      FROM raw_ext.autostore_bin_presentation
+      WHERE presented_at >= TIMESTAMP_NTZ'2025-10-27 00:00:00'
+      GROUP BY port_id
+      ORDER BY presentations DESC, port_id
+      LIMIT 1
+    answer:
+      keys: [port_id]
+      values: [{column: presentations, rel: 0.01}]
+
+  # ---------------------------------------------------------------- unfamiliar
+  - id: c132
+    question: How many times did the AutoStore system at Longgang stop so far in fiscal year 2026, and what was the most common reason?
+    role: ops_analyst_global
+    category: unfamiliar
+    expected_behavior: answer
+    trap_tags: []
+    required_kb_docs: [guides/autostore.md]
+    required_tables: [raw_ext.autostore_system_status]
+    reference_sql: |
+      SELECT COUNT(*) AS stops, MAX_BY(reason, n) AS top_reason
+      FROM (
+        SELECT reason, COUNT(*) OVER (PARTITION BY reason) AS n
+        FROM raw_ext.autostore_system_status
+        WHERE started_at >= TIMESTAMP_NTZ'2025-10-27 00:00:00'
+      )
+    answer:
+      values: [{column: stops, abs: 0}]
+      must_mention: [[ROBOT_FAULT, robot fault]]
+
+  # ---------------------------------------------------------------- traps
+  - id: c133
+    question: How many AutoStore bin presentations were there at Longgang on September 15, 2026?
+    role: ops_analyst_global
+    category: trap
+    expected_behavior: answer
+    trap_tags: [timezone]
+    required_kb_docs: [guides/autostore.md, concepts/time_zones.md]
+    required_tables: [raw_ext.autostore_bin_presentation]
+    notes: The controller already logs local time; converting it as if it were UTC shifts the day by eight hours.
+    reference_sql: |
+      SELECT COUNT(*) AS presentations
+      FROM raw_ext.autostore_bin_presentation
+      WHERE to_date(presented_at) = DATE'2026-09-15'
+    answer:
+      values: [{column: presentations, abs: 0}]
+
+  - id: c134
+    split: test
+    question: For how many hours was AutoStore port AS-PORT-03 closed so far in fiscal year 2026?
+    role: ops_analyst_global
+    category: trap
+    expected_behavior: answer
+    acceptable_behaviors: [answer, answer_with_assumption]
+    trap_tags: [open_intervals, scenario_a1]
+    required_kb_docs: [guides/autostore.md, metrics/autostore_availability.md]
+    required_tables: [raw_ext.autostore_port_status]
+    notes: All CLOSED intervals (maintenance and the five-day fault), clipped to FY2026 (from 2025-10-27 local).
+    reference_sql: |
+      SELECT ROUND(SUM((unix_timestamp(valid_to)
+                        - unix_timestamp(GREATEST(valid_from, TIMESTAMP_NTZ'2025-10-27 00:00:00'))) / 3600.0), 2)
+               AS closed_hours
+      FROM raw_ext.autostore_port_status
+      WHERE port_id = 'AS-PORT-03' AND status = 'CLOSED' AND valid_to > TIMESTAMP_NTZ'2025-10-27 00:00:00'
+    answer:
+      values: [{column: closed_hours, rel: 0.01, unit: hours}]
+
+  # ---------------------------------------------------------------- multi-step
+  - id: c137
+    question: >-
+      On the day of the longest AutoStore system stop so far in fiscal year 2026, how many picks were confirmed
+      at the Longgang AutoStore ports?
+    role: ops_analyst_global
+    category: multi_step
+    expected_behavior: answer
+    acceptable_behaviors: [answer, answer_with_assumption]
+    trap_tags: [timezone, cross_system_join]
+    required_kb_docs: [guides/autostore.md, metrics/pick_cycle_time.md]
+    required_tables: [raw_ext.autostore_system_status, raw_sap_ewm.scwm_ordim_c]
+    notes: The stop's local date (controller) matches EWM CONFIRMED_AT_WH (local), not CONFIRMED_AT (UTC).
+    reference_sql: |
+      WITH longest AS (
+        SELECT date_format(started_at, 'yyyyMMdd') AS stop_day
+        FROM raw_ext.autostore_system_status
+        WHERE started_at >= TIMESTAMP_NTZ'2025-10-27 00:00:00'
+        ORDER BY unix_timestamp(ended_at) - unix_timestamp(started_at) DESC
+        LIMIT 1
+      )
+      SELECT l.stop_day, COUNT(t.tanum) AS autostore_picks
+      FROM longest l
+      LEFT JOIN raw_sap_ewm.scwm_ordim_c t
+        ON t.lgnum = 'SZ01' AND t.vltyp = 'AS01' AND t.tostat = 'C' AND t.procty IN ('2010', '2020')
+       AND substr(cast(t.confirmed_at_wh AS STRING), 1, 8) = l.stop_day
+      GROUP BY l.stop_day
+    answer:
+      values: [{column: autostore_picks, abs: 0}]
+
+  # ---------------------------------------------------------------- investigation: injected scenario A1
+  - id: c135
+    split: test
+    question: AutoStore picks at Longgang were much slower for about a week in spring 2026. What happened?
+    role: ops_analyst_global
+    category: investigation
+    expected_behavior: answer
+    acceptable_behaviors: [answer, answer_with_assumption]
+    trap_tags: [scenario_a1]
+    required_kb_docs: [guides/autostore.md, metrics/pick_cycle_time.md]
+    required_tables: [raw_ext.autostore_port_status, raw_sap_ewm.scwm_ordim_c]
+    notes: >-
+      Scenario A1: ports AS-PORT-03 and AS-PORT-07 were closed (FAULT) from 2026-03-30 to 2026-04-03, and grid
+      picks queued longer. The answer must name both ports.
+    reference_sql: |
+      SELECT port_id, MIN(valid_from) AS closed_from, MAX(valid_to) AS closed_to
+      FROM raw_ext.autostore_port_status
+      WHERE reason = 'FAULT'
+      GROUP BY port_id
+    answer:
+      must_mention: [[AS-PORT-03, port 03, port 3], [AS-PORT-07, port 07, port 7]]
+
+  - id: c136
+    question: >-
+      Why did the median AutoStore pick cycle time at Longgang jump between March 30 and April 3, 2026?
+    role: ops_analyst_global
+    category: investigation
+    expected_behavior: answer
+    acceptable_behaviors: [answer, answer_with_assumption]
+    trap_tags: [scenario_a1]
+    required_kb_docs: [guides/autostore.md, metrics/pick_cycle_time.md]
+    required_tables: [raw_ext.autostore_port_status, raw_sap_ewm.scwm_ordim_c]
+    notes: Scenario A1 with the window given; the answer must name both closed ports.
+    reference_sql: |
+      SELECT port_id, MIN(valid_from) AS closed_from, MAX(valid_to) AS closed_to
+      FROM raw_ext.autostore_port_status
+      WHERE reason = 'FAULT'
+      GROUP BY port_id
+    answer:
+      must_mention: [[AS-PORT-03, port 03, port 3], [AS-PORT-07, port 07, port 7]]

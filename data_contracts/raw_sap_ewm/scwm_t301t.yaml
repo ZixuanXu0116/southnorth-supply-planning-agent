@@ -1,0 +1,20 @@
+table: raw_sap_ewm.scwm_t301t
+layer: raw
+source_system: SAP_EWM
+description: Storage type descriptions (EWM table /SCWM/T301T).
+grain: One row per client, language, warehouse number, and storage type.
+primary_key: [mandt, spras, lgnum, lgtyp]
+domain: WarehouseOperations
+subdomain: WarehouseOperations/Layout
+sensitivity: internal
+site_key: {column: lgnum, kind: warehouse}
+columns:
+  - {name: mandt, type: STRING, nullable: false, sap_type: CLNT3, comment: "SAP client."}
+  - {name: spras, type: STRING, nullable: false, sap_type: LANG1, comment: "Language key (E = English)."}
+  - {name: lgnum, type: STRING, nullable: false, sap_type: CHAR4, comment: "Warehouse number."}
+  - {name: lgtyp, type: STRING, nullable: false, sap_type: CHAR4, comment: "Storage type code."}
+  - {name: ltypt, type: STRING, nullable: false, sap_type: CHAR25, comment: "Storage type description."}
+tests:
+  relationships:
+    - {columns: [mandt, lgnum, lgtyp], references: raw_sap_ewm.scwm_t301, ref_columns: [mandt, lgnum, lgtyp]}
+access: [ops_analyst_global, site_manager_rr, site_manager_cn]

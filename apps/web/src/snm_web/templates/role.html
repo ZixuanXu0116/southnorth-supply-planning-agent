@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Choose a role{% endblock %}
+{% block area %}role{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>Choose the role to play</h1>
+  {% if required %}<p class="error">This page is for {{ required }}. Choose that role to continue.</p>{% endif %}
+  <p class="muted">Every action is recorded under the role you choose. Logistics has no page: it reads the
+  published cases in Databricks.</p>
+  <form method="post" action="/role">
+    <table>
+      <tr><th></th><th>Role</th><th class="num">Open requests</th></tr>
+      {% for choice in roles %}
+      <tr>
+        <td style="width:30px"><input type="radio" name="role" value="{{ choice.role }}" id="r{{ loop.index }}"
+             {% if choice.role == role %}checked{% endif %} style="width:auto"></td>
+        <td><label for="r{{ loop.index }}" style="margin:0;color:inherit;font-size:14px">{{ choice.label }}</label></td>
+        <td class="num">{% if choice.open is not none %}{{ choice.open }}{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </table>
+    <button type="submit">Continue</button>
+  </form>
+</div>
+{% endblock %}

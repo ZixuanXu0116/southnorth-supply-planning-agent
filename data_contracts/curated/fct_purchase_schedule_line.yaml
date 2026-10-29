@@ -1,0 +1,37 @@
+table: curated.fct_purchase_schedule_line
+layer: curated
+materialization: view
+depends_on: [raw_sap_ecc.eket, raw_sap_ecc.ekko, raw_sap_ecc.ekpo, raw_sap_ecc.lfa1, raw_sap_ecc.mseg, raw_sap_ecc.mkpf, curated.dim_date]
+description: Purchase order schedule lines with vendor, receiving site, order type, agreed delivery date, quantities, the order's first goods receipt (earliest 101 posting, site-local date), whether it arrived no later than one day after the agreed date, and whether it is open and overdue at the ECC data cut-off.
+grain: One row per purchase order, item, and schedule line.
+primary_key: [purchase_order, item, schedule_line]
+domain: Procurement
+subdomain: Procurement/Receipts
+sensitivity: internal
+columns:
+  - {name: purchase_order, type: STRING, nullable: false, comment: "Purchase order number."}
+  - {name: item, type: STRING, nullable: false, comment: "Purchase order item."}
+  - {name: schedule_line, type: STRING, nullable: false, comment: "Schedule line."}
+  - {name: company_code, type: STRING, nullable: false, comment: "Company code: 1000 (US) or 2000 (China)."}
+  - {name: plant, type: STRING, nullable: false, comment: "Receiving plant: US10 or CN10."}
+  - {name: storage_location, type: STRING, nullable: false, comment: "Receiving storage location (1900 = Longgang bonded area)."}
+  - {name: site, type: STRING, nullable: false, comment: "Receiving site: Round Rock, Longgang, or Dongguan."}
+  - {name: order_type, type: STRING, nullable: false, comment: "standard (NB) or expedited (ZEX emergency buy, received the same day)."}
+  - {name: vendor, type: STRING, nullable: false, comment: "Vendor number."}
+  - {name: vendor_name, type: STRING, comment: "Vendor name."}
+  - {name: vendor_country, type: STRING, comment: "Vendor country code."}
+  - {name: material, type: STRING, nullable: false, comment: "Material number without leading zeros."}
+  - {name: agreed_delivery_date, type: DATE, nullable: false, comment: "Agreed delivery date (EKET.EINDT)."}
+  - {name: scheduled_qty, type: "DECIMAL(13,3)", nullable: false, comment: "Scheduled quantity, base unit."}
+  - {name: received_qty, type: "DECIMAL(13,3)", nullable: false, comment: "Quantity received so far, base unit."}
+  - {name: is_fully_received, type: BOOLEAN, nullable: false, comment: "Received quantity covers the scheduled quantity."}
+  - {name: first_receipt_date, type: DATE, comment: "Date of the order's first goods receipt (site-local); NULL if nothing was received."}
+  - {name: is_received, type: BOOLEAN, nullable: false, comment: "At least one goods receipt posted for the order."}
+  - {name: is_on_time, type: BOOLEAN, nullable: false, comment: "First receipt no later than one day after the agreed date; unreceived lines are not on time."}
+  - {name: is_overdue_open, type: BOOLEAN, nullable: false, comment: "Not fully received and the agreed date is before the ECC data cut-off day."}
+  - {name: ecc_cutoff_date, type: DATE, nullable: false, comment: "ECC data cut-off day."}
+  - {name: receipt_fiscal_year, type: INT, comment: "Fiscal year of the first receipt date."}
+  - {name: receipt_fiscal_quarter, type: INT, comment: "Fiscal quarter of the first receipt date."}
+  - {name: receipt_fiscal_period, type: INT, comment: "Fiscal period of the first receipt date."}
+  - {name: receipt_fiscal_week, type: INT, comment: "Fiscal week of the first receipt date."}
+access: []

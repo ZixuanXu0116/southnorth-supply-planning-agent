@@ -1,0 +1,19 @@
+table: raw_sap_ecc.t001l
+layer: raw
+source_system: SAP_ECC
+description: Storage locations per plant (SAP table T001L). Main warehouse, overflow hub, production supply area, and bonded storage locations.
+grain: One row per client, plant, and storage location.
+primary_key: [mandt, werks, lgort]
+domain: MasterData
+subdomain: MasterData/Organization
+sensitivity: internal
+site_key: {column: werks, kind: plant}
+columns:
+  - {name: mandt, type: STRING, nullable: false, sap_type: CLNT3, comment: "SAP client."}
+  - {name: werks, type: STRING, nullable: false, sap_type: CHAR4, comment: "Plant code."}
+  - {name: lgort, type: STRING, nullable: false, sap_type: CHAR4, comment: "Storage location code. US10: 1000 main warehouse, 2001 overflow hub (2002 and 2003 are overflow locations without flows), 2100 production supply area. CN10: 1000 Longgang main warehouse, 2100 production supply area, 1900 bonded area, 3000 Dongguan spoke."}
+  - {name: lgobe, type: STRING, nullable: false, sap_type: CHAR16, comment: "Storage location description."}
+tests:
+  relationships:
+    - {columns: [mandt, werks], references: raw_sap_ecc.t001w, ref_columns: [mandt, werks]}
+access: [ops_analyst_global, site_manager_rr, site_manager_cn]

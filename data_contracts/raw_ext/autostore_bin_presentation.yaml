@@ -1,0 +1,23 @@
+table: raw_ext.autostore_bin_presentation
+layer: raw
+source_system: AUTOSTORE
+description: Bin presentations logged by the AutoStore controller at Longgang. A robot delivers a grid bin to a port; one presentation can serve several warehouse tasks on that bin (picks from storage type AS01 or decanting putaways into it). Timestamps are Longgang local time (Asia/Shanghai) without an offset, unlike EWM (UTC). The controller does not know EWM task numbers.
+grain: One row per bin presentation.
+primary_key: [presentation_id]
+domain: Automation
+subdomain: Automation/AutoStore
+sensitivity: internal
+site_scope: CN10
+columns:
+  - {name: presentation_id, type: STRING, nullable: false, comment: "Presentation number (controller sequence)."}
+  - {name: port_id, type: STRING, nullable: false, comment: "Port where the bin was presented; the same identifiers as EWM task resources (PRSRC)."}
+  - {name: bin_id, type: STRING, nullable: false, comment: "Grid bin; the same identifier as the EWM storage bin in storage type AS01."}
+  - {name: robot_id, type: STRING, nullable: false, comment: "Robot that delivered the bin."}
+  - {name: purpose, type: STRING, nullable: false, comment: "PICK, DECANT (putaway into the grid), or MIXED."}
+  - {name: presented_at, type: TIMESTAMP_NTZ, nullable: false, comment: "Bin arrived at the port (Longgang local time)."}
+  - {name: closed_at, type: TIMESTAMP_NTZ, nullable: false, comment: "Bin released from the port (Longgang local time)."}
+  - {name: task_count, type: INT, nullable: false, comment: "Warehouse tasks served during the presentation."}
+tests:
+  accepted_values:
+    - {column: purpose, values: [PICK, DECANT, MIXED]}
+access: [ops_analyst_global, site_manager_cn]

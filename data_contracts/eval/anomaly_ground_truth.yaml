@@ -1,0 +1,19 @@
+table: eval.anomaly_ground_truth
+layer: eval
+source_system: GENERATOR
+description: Ground truth of the scenarios injected by the data generator, for scoring anomaly investigations. Never readable by the agent.
+grain: One row per injected scenario.
+primary_key: [scenario_id]
+domain: Evaluation
+sensitivity: restricted
+columns:
+  - {name: scenario_id, type: STRING, nullable: false, comment: "Scenario identifier (see DATA_MODEL.md section 6; A8a and A8b split scenario A8)."}
+  - {name: scenario_type, type: STRING, nullable: false, comment: "real, data_artifact, definition_artifact, or expected_seasonality."}
+  - {name: site, type: STRING, nullable: false, comment: "Affected site or sites (Round Rock, Longgang, Dongguan, or All sites)."}
+  - {name: lgnum, type: STRING, nullable: false, comment: "Affected EWM warehouse number, blank if not warehouse specific."}
+  - {name: start_date, type: DATE, nullable: false, comment: "First affected site-local date."}
+  - {name: end_date, type: DATE, nullable: true, comment: "Last affected site-local date; null if still active at extraction."}
+  - {name: scope, type: STRING, nullable: false, comment: "What is affected (materials, resources, documents)."}
+  - {name: root_cause, type: STRING, nullable: false, comment: "The injected cause."}
+  - {name: expected_signals, type: STRING, nullable: false, comment: "Observable effects in the data."}
+access: []

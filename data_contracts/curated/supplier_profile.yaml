@@ -1,0 +1,35 @@
+table: curated.supplier_profile
+layer: curated
+materialization: table
+description: Vendor profile computed nightly by the replenishment engine from purchase orders, goods receipts, the purchasing interaction history, and the supplier condition sheet. ABC class by trailing 12-month spend (A covers the top 70 percent of spend, B the next 20 percent, C the rest), reliability, interaction effort, expedite terms, and whether the vendor as a whole is eligible for the intake agent. Spend, surcharges, and freight are commercial data.
+grain: One row per as-of date and vendor.
+primary_key: [as_of_date, vendor]
+domain: Procurement
+subdomain: Procurement/Suppliers
+sensitivity: internal
+columns:
+  - {name: as_of_date, type: DATE, nullable: false, comment: "Day the profile was computed for."}
+  - {name: vendor, type: STRING, nullable: false, comment: "Vendor number (LFA1)."}
+  - {name: name, type: STRING, nullable: false, comment: "Vendor name."}
+  - {name: country, type: STRING, nullable: false, comment: "Vendor country (ISO alpha-2)."}
+  - {name: supplier_class, type: STRING, nullable: false, comment: "ABC class by trailing 12-month spend."}
+  - {name: spend_usd_12m, type: "DECIMAL(15,2)", nullable: false, sensitivity: commercial, comment: "Purchase order value of the trailing 12 months, in USD."}
+  - {name: po_count_12m, type: INT, nullable: false, comment: "Purchase orders created in the trailing 12 months."}
+  - {name: on_time_rate_12m, type: DOUBLE, comment: "Share of standard orders received no later than one day after the agreed date; NULL without receipts."}
+  - {name: median_lateness_days, type: DOUBLE, nullable: false, comment: "Median days between the agreed date and the first receipt (0 when early); used to shift expected receipts."}
+  - {name: median_rounds, type: DOUBLE, comment: "Median messages per closed expedite request with the vendor; NULL without expedite history."}
+  - {name: median_days_to_resolution, type: DOUBLE, comment: "Median days to close an expedite request with the vendor; NULL without expedite history."}
+  - {name: strategic, type: BOOLEAN, nullable: false, comment: "Strategic supplier (handled by purchasing staff)."}
+  - {name: portal_onboarded, type: BOOLEAN, nullable: false, comment: "Vendor has access to the supplier portal."}
+  - {name: min_expedite_days, type: INT, comment: "Shortest expedited lead time in calendar days; NULL without a condition sheet."}
+  - {name: surcharge_pct_lt7, type: "DECIMAL(15,2)", nullable: false, sensitivity: commercial, comment: "Expedite surcharge in percent when fewer than 7 days are gained."}
+  - {name: surcharge_pct_7_13, type: "DECIMAL(15,2)", nullable: false, sensitivity: commercial, comment: "Expedite surcharge in percent when 7 to 13 days are gained."}
+  - {name: surcharge_pct_ge14, type: "DECIMAL(15,2)", nullable: false, sensitivity: commercial, comment: "Expedite surcharge in percent when 14 or more days are gained."}
+  - {name: expedite_freight_usd, type: "DECIMAL(15,2)", nullable: false, sensitivity: commercial, comment: "Expedited freight per shipment in USD."}
+  - {name: agent_eligible_supplier, type: BOOLEAN, nullable: false, comment: "Tail supplier (class C or few orders), not strategic, with high historical effort or no history: its cases may go to the intake agent."}
+  - {name: engine_version, type: STRING, nullable: false, comment: "Version of the replenishment engine."}
+  - {name: params_digest, type: STRING, nullable: false, comment: "Digest of the engine parameters used."}
+tests:
+  accepted_values:
+    - {column: supplier_class, values: [A, B, C]}
+access: [ops_analyst_global, site_manager_rr, site_manager_cn, purchasing]

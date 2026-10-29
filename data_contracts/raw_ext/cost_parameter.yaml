@@ -1,0 +1,15 @@
+table: raw_ext.cost_parameter
+layer: raw
+source_system: PURCHASING
+description: Cost model parameters of the replenishment planning evaluation (line-down cost per criticality class, holding rate, transfer and order costs). Synthetic planning parameters, not a statement about any real cost.
+grain: One row per parameter.
+primary_key: [parameter]
+domain: Procurement
+subdomain: Procurement/Planning
+sensitivity: internal
+columns:
+  - {name: parameter, type: STRING, nullable: false, comment: "Parameter name (line_down_cost_a, holding_rate_annual, transfer_cost_fixed, ...)."}
+  - {name: value, type: "DECIMAL(15,2)", nullable: false, sensitivity: commercial, comment: "Parameter value in the stated unit."}
+  - {name: unit, type: STRING, nullable: false, comment: "Unit of the value."}
+  - {name: description, type: STRING, nullable: false, comment: "What the parameter means."}
+access: [purchasing]

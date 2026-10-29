@@ -1,0 +1,23 @@
+[project]
+name = "snm-data"
+version = "0.0.0"
+description = "Synthetic SAP-shaped logistics data generator, contracts, and pipelines."
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    "databricks-sdk>=0.141",
+    "databricks-sql-connector>=4.6",
+    "numpy>=2.0",
+    "polars>=1.30",
+    "pydantic>=2.10",
+    "pyyaml>=6.0",
+]
+
+[project.scripts]
+snm-data = "snm_data.cli:main"
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/snm_data"]

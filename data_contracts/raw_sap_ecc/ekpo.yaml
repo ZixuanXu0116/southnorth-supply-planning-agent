@@ -1,0 +1,31 @@
+table: raw_sap_ecc.ekpo
+layer: raw
+source_system: SAP_ECC
+description: Purchasing document item (SAP table EKPO). Quantities are in the base unit; NETPR is per PEINH units in the order currency.
+grain: One row per client, purchase order, and item.
+primary_key: [mandt, ebeln, ebelp]
+domain: Procurement
+subdomain: Procurement/Purchase orders
+sensitivity: internal
+site_key: {column: werks, kind: plant}
+columns:
+  - {name: mandt, type: STRING, nullable: false, sap_type: CLNT3, comment: "SAP client."}
+  - {name: ebeln, type: STRING, nullable: false, sap_type: CHAR10, comment: "Purchase order number."}
+  - {name: ebelp, type: STRING, nullable: false, sap_type: NUMC5, comment: "Purchase order item."}
+  - {name: matnr, type: STRING, nullable: false, sap_type: CHAR18, comment: "Material number."}
+  - {name: werks, type: STRING, nullable: false, sap_type: CHAR4, comment: "Receiving plant."}
+  - {name: lgort, type: STRING, nullable: false, sap_type: CHAR4, comment: "Receiving storage location (1900 = Longgang bonded area)."}
+  - {name: menge, type: "DECIMAL(13,3)", nullable: false, sap_type: QUAN13_3, comment: "Order quantity."}
+  - {name: meins, type: STRING, nullable: false, sap_type: UNIT3, comment: "Order unit (base unit)."}
+  - {name: netpr, type: "DECIMAL(11,2)", nullable: false, sap_type: CURR11_2, comment: "Net price per PEINH units."}
+  - {name: peinh, type: "DECIMAL(5,0)", nullable: false, sap_type: DEC5, comment: "Price unit."}
+  - {name: pstyp, type: STRING, nullable: false, sap_type: CHAR1, comment: "Item category: 0 standard, 2 consignment."}
+  - {name: elikz, type: STRING, nullable: false, sap_type: CHAR1, comment: "Delivery completed indicator (X = fully received)."}
+tests:
+  accepted_values:
+    - {column: pstyp, values: ["0", "2"]}
+    - {column: elikz, values: ["", X]}
+  relationships:
+    - {columns: [mandt, ebeln], references: raw_sap_ecc.ekko, ref_columns: [mandt, ebeln]}
+    - {columns: [mandt, matnr], references: raw_sap_ecc.mara, ref_columns: [mandt, matnr]}
+access: [ops_analyst_global, site_manager_rr, site_manager_cn]

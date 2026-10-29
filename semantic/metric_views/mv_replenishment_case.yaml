@@ -1,0 +1,88 @@
+# Unity Catalog metric view. `definition` is deployed as YAML 1.1 to <catalog>.semantic.<name>
+# (`snm-data build`); the other keys are project metadata: the roles that may query it and the
+# knowledge-base documents whose definitions it implements.
+name: mv_replenishment_case
+access: [ops_analyst_global, site_manager_rr, site_manager_cn, purchasing]
+kb: [guides/replenishment_planning.md]
+definition:
+  version: 1.1
+  comment: >-
+    Replenishment cases opened by the engine (one per material, plant, and condition on the as-of date):
+    shortages (projected stock below zero), warnings (below safety stock), and excess (above the maximum for
+    eight weeks), with the recommended lever, whether it covers the gap in time, and the triage class. Always
+    filter as_of_date to one run. Costs are not in this view.
+  source: "{catalog}.curated.replenishment_case"
+  dimensions:
+    - name: as_of_date
+      expr: as_of_date
+      comment: "Day the cases were computed for; filter to one run."
+    - name: case_id
+      expr: case_id
+      comment: "Case identifier."
+    - name: site
+      expr: site
+      comment: "Hub site of the plant."
+    - name: plant
+      expr: plant
+      comment: "Plant: US10 or CN10."
+    - name: material
+      expr: material
+      comment: "Material number without leading zeros."
+    - name: criticality
+      expr: criticality
+      comment: "ABC criticality class of the material (A most critical)."
+    - name: condition
+      expr: condition
+      comment: "shortage, warning, or excess."
+    - name: trigger_date
+      expr: trigger_date
+      comment: "First day the condition holds."
+    - name: lever
+      expr: lever
+      comment: "Recommended action: transfer, expedite, new_order, expedited_new_order, or hold."
+    - name: covers_in_time
+      expr: covers_in_time
+      comment: "The recommended lever covers the gap on or before the trigger date."
+    - name: triage_class
+      expr: triage_class
+      comment: "agent_eligible, human_handled, or no_supplier."
+    - name: vendor
+      expr: vendor
+      comment: "Vendor of the material's latest purchase order."
+    - name: vendor_name
+      expr: vendor_name
+      comment: "Vendor name."
+    - name: supplier_class
+      expr: supplier_class
+      comment: "Vendor ABC class by trailing spend."
+  measures:
+    - name: cases
+      expr: COUNT(1)
+      comment: "Cases selected."
+    - name: shortage_cases
+      expr: COUNT_IF(condition = 'shortage')
+      comment: "Cases with projected pooled stock below zero."
+    - name: warning_cases
+      expr: COUNT_IF(condition = 'warning')
+      comment: "Cases with pooled stock below the minimum (safety stock) but not below zero."
+    - name: pull_cases
+      expr: COUNT_IF(condition = 'pull')
+      comment: "Cases where the main warehouse falls below its minimum while the pooled stock does not: stock to pull from the overflow hub."
+    - name: excess_cases
+      expr: COUNT_IF(condition = 'excess')
+      comment: "Cases with main warehouse stock above the maximum for eight weeks: stock to move to the overflow hub."
+    - name: agent_eligible_cases
+      expr: COUNT_IF(triage_class = 'agent_eligible')
+      comment: "Cases whose supplier exchange may go to the intake agent."
+    - name: cases_not_in_time
+      expr: COUNT_IF(NOT covers_in_time)
+      comment: "Cases whose recommended lever does not cover the gap by the trigger date (expedites are not recommended for warnings, so a warning whose standard order arrives after the warning date counts here)."
+    - name: gap_qty
+      expr: SUM(gap_qty)
+      comment: "Gap quantity of the selected cases (base units)."
+    - name: days_short
+      expr: SUM(days_short)
+      comment: "Days short across the selected cases."
+    - name: median_days_to_trigger
+      expr: percentile(datediff(trigger_date, as_of_date), 0.5)
+      comment: "Median days from the as-of date to the trigger date."

@@ -1,0 +1,29 @@
+table: raw_ext.workforce_roster
+layer: raw
+source_system: HR_EXTRACT
+description: Pseudonymized warehouse workforce roster from the HR system. Maps SAP user names to pseudonymous operator IDs, teams, and shifts. System users (WF-BATCH, AS-INTERFACE, RFC-EWM) are not people and are not listed.
+grain: One row per operator assignment period.
+primary_key: [operator_id, active_from]
+domain: Workforce
+subdomain: Workforce/Roster
+sensitivity: restricted
+site_key: {column: werks, kind: plant}
+site_scope: all
+columns:
+  - {name: operator_id, type: STRING, nullable: false, sensitivity: restricted, comment: "Pseudonymous operator identifier (OP-nnnnn)."}
+  - {name: sap_uname, type: STRING, nullable: false, sensitivity: restricted, comment: "SAP user name used in EWM confirmations."}
+  - {name: werks, type: STRING, nullable: false, comment: "Plant of the operator's home warehouse."}
+  - {name: lgnum, type: STRING, nullable: false, comment: "Home EWM warehouse number."}
+  - {name: team, type: STRING, nullable: false, comment: "Team: OUTB outbound, INB inbound, INV inventory control."}
+  - {name: shift, type: STRING, nullable: false, comment: "Shift: A day, B evening, C night (night shift only at SZ01)."}
+  - {name: employment_type, type: STRING, nullable: false, comment: "FTE = employee, TEMP = agency temporary worker."}
+  - {name: active_from, type: DATE, nullable: false, comment: "First day of the assignment (site-local date)."}
+  - {name: active_to, type: DATE, nullable: true, comment: "Last day of the assignment; null while active."}
+tests:
+  unique: [[sap_uname, active_from]]
+  accepted_values:
+    - {column: lgnum, values: [RR01, SZ01, DG01]}
+    - {column: team, values: [OUTB, INB, INV]}
+    - {column: shift, values: [A, B, C]}
+    - {column: employment_type, values: [FTE, TEMP]}
+access: [site_manager_rr, site_manager_cn]

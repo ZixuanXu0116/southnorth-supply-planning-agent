@@ -1,0 +1,24 @@
+table: raw_sap_ewm.scdl_db_refdoc
+layer: raw
+source_system: SAP_EWM
+description: Reference documents of EWM delivery items (table /SCDL/DB_REFDOC, simplified). Links EWM outbound delivery order items to ECC delivery items, and EWM inbound delivery items to ECC purchase order items.
+grain: One row per client, document, item, and reference document category.
+primary_key: [mandt, docid, itemid, refdoccat]
+domain: Outbound
+subdomain: Outbound/Shipping
+sensitivity: internal
+columns:
+  - {name: mandt, type: STRING, nullable: false, sap_type: CLNT3, comment: "SAP client."}
+  - {name: docid, type: STRING, nullable: false, sap_type: RAW16, comment: "Document GUID."}
+  - {name: itemid, type: STRING, nullable: false, sap_type: RAW16, comment: "Item GUID."}
+  - {name: refdoccat, type: STRING, nullable: false, sap_type: CHAR3, comment: "Reference document category in this dataset: ERP = ECC outbound delivery, PO = ECC purchase order."}
+  - {name: refdocno, type: STRING, nullable: false, sap_type: CHAR35, comment: "Reference document number (ECC delivery or purchase order number)."}
+  - {name: refitemno, type: STRING, nullable: false, sap_type: CHAR10, comment: "Reference item number (ECC delivery item or purchase order item)."}
+tests:
+  accepted_values:
+    - {column: refdoccat, values: [ERP, PO]}
+  relationships:
+    - {columns: [mandt, docid, itemid], references: raw_sap_ewm.scdl_db_proci_o, ref_columns: [mandt, docid, itemid], where: {refdoccat: ERP}}
+    - {columns: [mandt, docid, itemid], references: raw_sap_ewm.scdl_db_proci_i, ref_columns: [mandt, docid, itemid], where: {refdoccat: PO}}
+    - {columns: [mandt, refdocno], references: raw_sap_ecc.ekko, ref_columns: [mandt, ebeln], where: {refdoccat: PO}}
+access: [ops_analyst_global, site_manager_rr, site_manager_cn]

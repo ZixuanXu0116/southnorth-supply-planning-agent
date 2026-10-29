@@ -1,0 +1,21 @@
+table: raw_ext.lts_rfid_scan
+layer: raw
+source_system: LTS
+description: RFID scans of pick totes at Round Rock from the LTS tracking service. Each EWM warehouse order is picked into one tagged tote; readers log the tote when it leaves the storage area after its last pick (PICK_EXIT, or CAGE_EXIT for the secure cage) and when it passes a dock door at truck loading (DOCK). Timestamps are UTC. The warehouse order (WHO) captured at tote assignment links a scan to the warehouse tasks.
+grain: One row per tag read.
+primary_key: [scan_id]
+domain: WarehouseOperations
+subdomain: WarehouseOperations/Tracking
+sensitivity: internal
+site_scope: US10
+columns:
+  - {name: scan_id, type: STRING, nullable: false, comment: "Scan number (LTS sequence)."}
+  - {name: reader_id, type: STRING, nullable: false, comment: "RFID reader (portal) that read the tag."}
+  - {name: zone, type: STRING, nullable: false, comment: "Reader zone: PICK_EXIT, CAGE_EXIT (secure cage, storage type 0030), or DOCK."}
+  - {name: tag_id, type: STRING, nullable: false, comment: "Tote tag EPC (hexadecimal)."}
+  - {name: who, type: STRING, nullable: false, comment: "EWM warehouse order of the tote (joins to scwm_ordim_c.who)."}
+  - {name: scanned_at, type: TIMESTAMP, nullable: false, comment: "Read time (UTC)."}
+tests:
+  accepted_values:
+    - {column: zone, values: [PICK_EXIT, CAGE_EXIT, DOCK]}
+access: [ops_analyst_global, site_manager_rr]

@@ -1,0 +1,23 @@
+table: raw_sap_ecc.plaf
+layer: raw
+source_system: SAP_ECC
+description: Planned orders (SAP table PLAF) from the MRP run at the extraction, one per product and week for weeks 2 to 13 ahead at each assembly plant; their component requirements are the AR rows of RESB.
+grain: One row per client and planned order.
+primary_key: [mandt, plnum]
+domain: Manufacturing
+subdomain: Manufacturing/Planned orders
+sensitivity: internal
+site_key: {column: plwrk, kind: plant}
+columns:
+  - {name: mandt, type: STRING, nullable: false, sap_type: CLNT3, comment: "SAP client."}
+  - {name: plnum, type: STRING, nullable: false, sap_type: CHAR10, comment: "Planned order number."}
+  - {name: matnr, type: STRING, nullable: false, sap_type: CHAR18, comment: "Material to be produced."}
+  - {name: plwrk, type: STRING, nullable: false, sap_type: CHAR4, comment: "Planning plant."}
+  - {name: gsmng, type: "DECIMAL(13,3)", nullable: false, sap_type: QUAN13_3, comment: "Planned quantity."}
+  - {name: meins, type: STRING, nullable: false, sap_type: UNIT3, comment: "Base unit."}
+  - {name: psttr, type: STRING, nullable: false, sap_type: DATS, comment: "Planned start date (component requirement date)."}
+  - {name: pedtr, type: STRING, nullable: false, sap_type: DATS, comment: "Planned finish date."}
+  - {name: paart, type: STRING, nullable: false, sap_type: CHAR4, comment: "Planned order type (LA = standard in-house production)."}
+  - {name: dispo, type: STRING, nullable: false, sap_type: CHAR3, comment: "MRP controller."}
+  - {name: rsnum, type: STRING, nullable: false, sap_type: NUMC10, comment: "Reservation number of the dependent requirements (RESB)."}
+access: [ops_analyst_global, site_manager_rr, site_manager_cn, purchasing]

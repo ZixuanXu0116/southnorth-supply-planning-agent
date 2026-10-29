@@ -1,0 +1,49 @@
+# Unity Catalog metric view. `definition` is deployed as YAML 1.1 to <catalog>.semantic.<name>
+# (`snm-data build`); the other keys are project metadata: the roles that may query it and the
+# knowledge-base documents whose definitions it implements.
+name: mv_outbound_due
+access: [ops_analyst_global, site_manager_rr, site_manager_cn]
+kb: [metrics/on_time_pgi_rate.md]
+definition:
+  version: 1.1
+  comment: >-
+    Outbound deliveries due for goods issue, by planned goods issue date (shipping-point local date). Deliveries
+    due on or after the ECC data cut-off day are left out because they cannot be measured yet. Use it for the
+    on-time PGI rate; use mv_outbound_shipped for shipped deliveries and lines.
+  source: "{catalog}.curated.fct_outbound_delivery"
+  filter: is_due_before_cutoff
+  dimensions:
+    - name: site
+      expr: site
+      comment: "Shipping site: Round Rock, Longgang, or Dongguan."
+    - name: shipping_point
+      expr: shipping_point
+      comment: "Shipping point: U100 Round Rock, C100 Longgang, C300 Dongguan."
+    - name: warehouse
+      expr: warehouse
+      comment: "EWM warehouse: RR01 Round Rock, SZ01 Longgang, DG01 Dongguan."
+    - name: planned_gi_date
+      expr: planned_gi_date
+      comment: "Planned goods issue date (shipping-point local date); filter with a range for calendar months or weeks."
+    - name: fiscal_year
+      expr: planned_fiscal_year
+      comment: "Fiscal year of the planned goods issue date."
+    - name: fiscal_quarter
+      expr: planned_fiscal_quarter
+      comment: "Fiscal quarter (1-4) of the planned goods issue date."
+    - name: fiscal_period
+      expr: planned_fiscal_period
+      comment: "Fiscal period (1-12) of the planned goods issue date."
+    - name: fiscal_week
+      expr: planned_fiscal_week
+      comment: "Fiscal week (1-53, Monday to Sunday) of the planned goods issue date."
+  measures:
+    - name: deliveries_due
+      expr: COUNT(1)
+      comment: "Deliveries due for goods issue."
+    - name: deliveries_on_time
+      expr: COUNT_IF(is_on_time)
+      comment: "Deliveries due whose goods issue was posted on or before the planned date."
+    - name: on_time_pgi_rate
+      expr: try_divide(COUNT_IF(is_on_time), COUNT(1))
+      comment: "On-time PGI rate: deliveries_on_time / deliveries_due, a fraction between 0 and 1. Open deliveries past their due date count as late."

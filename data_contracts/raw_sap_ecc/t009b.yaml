@@ -1,0 +1,23 @@
+table: raw_sap_ecc.t009b
+layer: raw
+source_system: SAP_ECC
+description: Fiscal year variant periods (SAP table T009B), maintained per calendar year. For a date, take the rows of its calendar year (BDATJ), pick the first row whose month/day is on or after the date; that row gives the period (POPER), and fiscal year = calendar year + RELJR. Periods spanning New Year have an extra row ending on Dec 31.
+grain: One row per client, fiscal year variant, calendar year, and period end date.
+primary_key: [mandt, periv, bdatj, bumon, butag]
+domain: MasterData
+subdomain: MasterData/Calendar
+sensitivity: internal
+columns:
+  - {name: mandt, type: STRING, nullable: false, sap_type: CLNT3, comment: "SAP client."}
+  - {name: periv, type: STRING, nullable: false, sap_type: CHAR2, comment: "Fiscal year variant."}
+  - {name: bdatj, type: STRING, nullable: false, sap_type: NUMC4, comment: "Calendar year the row applies to."}
+  - {name: bumon, type: STRING, nullable: false, sap_type: NUMC2, comment: "Month of the period end (or Dec 31 split) within that calendar year."}
+  - {name: butag, type: STRING, nullable: false, sap_type: NUMC2, comment: "Day of the period end (or Dec 31 split) within that calendar year."}
+  - {name: poper, type: STRING, nullable: false, sap_type: NUMC3, comment: "Fiscal period (001-012)."}
+  - {name: reljr, type: STRING, nullable: false, sap_type: CHAR2, comment: "Fiscal year shift relative to the calendar year: '+1' when the period belongs to the next fiscal year, '0' otherwise."}
+tests:
+  accepted_values:
+    - {column: reljr, values: ["0", "+1"]}
+  relationships:
+    - {columns: [mandt, periv], references: raw_sap_ecc.t009, ref_columns: [mandt, periv]}
+access: [ops_analyst_global, site_manager_rr, site_manager_cn, trade_compliance]

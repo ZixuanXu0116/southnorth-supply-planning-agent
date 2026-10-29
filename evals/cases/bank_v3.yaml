@@ -1,0 +1,287 @@
+# Evaluation bank v3: bank v2 plus 11 cases on EWM inbound and putaway (c117-c127). Owner review pending.
+#
+# Needs generator 0.3.0 (inbound deliveries, putaway tasks, PACI, scenario A2). The investigation cases
+# check the explanation with must_mention terms. Same conventions as seed.yaml; about 45 % of the new
+# cases are in the locked test split.
+
+suite: bank_v3
+as_of: "2026-09-21"  # Monday, first day of FY2026 P12; ECC extracted 2026-09-21 05:00 UTC
+data_snapshot: {profile: small, generator_version: 0.8.0, seed: 20260924}
+includes: [bank_v2]
+
+cases:
+  # ---------------------------------------------------------------- covered: dock-to-stock
+  - id: c117
+    question: What was the median dock-to-stock time at each warehouse for receipts in fiscal period 11 of FY2026?
+    role: ops_analyst_global
+    category: covered
+    expected_behavior: answer
+    acceptable_behaviors: [answer, answer_with_assumption]
+    trap_tags: [cancelled_tasks, metric_definition]
+    required_kb_docs: [metrics/dock_to_stock_time.md, guides/inbound_flow.md, concepts/fiscal_calendar.md]
+    required_tables: [raw_sap_ewm.scwm_ordim_c]
+    notes: >-
+      Receipt to confirmed putaway per inbound delivery item, by site-local receipt date (2026-08-24 to
+      2026-09-20). Dongguan has no inbound deliveries in the extract. Starting from the ECC goods receipt
+      posting (converted to UTC) adds about two minutes and passes (6 % tolerance, as in c124).
+    reference_sql: |
+      WITH putaway AS (
+        SELECT lgnum, rdocid, ritmid,
+               MIN(created_at) AS gr_at, MIN(created_at_wh) AS gr_at_wh,
+               MAX(CASE WHEN tostat = 'C' THEN confirmed_at END) AS stored_at
+        FROM raw_sap_ewm.scwm_ordim_c
+        WHERE procty = '1011' AND rdoccat = 'PDI'
+        GROUP BY lgnum, rdocid, ritmid
+      )
+      SELECT lgnum,
+             percentile((unix_timestamp(to_timestamp(cast(stored_at AS STRING), 'yyyyMMddHHmmss'))
+                         - unix_timestamp(to_timestamp(cast(gr_at AS STRING), 'yyyyMMddHHmmss'))) / 60.0,
+                        0.5) AS median_minutes
+      FROM putaway
+      WHERE stored_at IS NOT NULL AND substr(cast(gr_at_wh AS STRING), 1, 8) BETWEEN '20260824' AND '20260920'
+      GROUP BY lgnum
+    answer:
+      keys: [lgnum]
+      values: [{column: median_minutes, rel: 0.06, unit: minutes}]
+
+  - id: c118
+    split: test
+    question: >-
+      What were the median and 90th-percentile dock-to-stock times at Longgang for receipts in fiscal Q3
+      of FY2026?
+    role: ops_analyst_global
+    category: covered
+    expected_behavior: answer
+    acceptable_behaviors: [answer, answer_with_assumption]
+    trap_tags: [cancelled_tasks, metric_definition, bonded]
+    required_kb_docs: [metrics/dock_to_stock_time.md, guides/inbound_flow.md, sites/longgang.md]
+    required_tables: [raw_sap_ewm.scwm_ordim_c]
+    notes: FY2026 Q3 = 2026-04-27 to 2026-07-26 by site-local receipt date; warehouse SZ01 including bonded receipts.
+    reference_sql: |
+      WITH putaway AS (
+        SELECT rdocid, ritmid,
+               MIN(created_at) AS gr_at, MIN(created_at_wh) AS gr_at_wh,
+               MAX(CASE WHEN tostat = 'C' THEN confirmed_at END) AS stored_at
+        FROM raw_sap_ewm.scwm_ordim_c
+        WHERE lgnum = 'SZ01' AND procty = '1011' AND rdoccat = 'PDI'
+        GROUP BY rdocid, ritmid
+      ),
+      d AS (
+        SELECT (unix_timestamp(to_timestamp(cast(stored_at AS STRING), 'yyyyMMddHHmmss'))
+                - unix_timestamp(to_timestamp(cast(gr_at AS STRING), 'yyyyMMddHHmmss'))) / 60.0 AS minutes
+        FROM putaway
+        WHERE stored_at IS NOT NULL AND substr(cast(gr_at_wh AS STRING), 1, 8) BETWEEN '20260427' AND '20260726'
+      )
+      SELECT percentile(minutes, 0.5) AS median_minutes, percentile(minutes, 0.9) AS p90_minutes FROM d
+    answer:
+      values: [{column: median_minutes, rel: 0.06, unit: minutes}, {column: p90_minutes, rel: 0.06, unit: minutes}]
+
+  # ---------------------------------------------------------------- ad hoc
+  - id: c119
+    question: How many receipts were put away into the AutoStore grid at Longgang in fiscal period 11 of FY2026?
+    role: ops_analyst_global
+    category: adhoc
+    expected_behavior: answer
+    acceptable_behaviors: [answer, answer_with_assumption]
+    trap_tags: [cancelled_tasks]
+    required_kb_docs: [guides/inbound_flow.md, sites/longgang.md]
+    required_tables: [raw_sap_ewm.scwm_ordim_c]
+    notes: Confirmed putaway tasks (1011) into storage type AS01, by site-local confirmation date.
+    reference_sql: |
+      SELECT COUNT(*) AS autostore_putaways
+      FROM raw_sap_ewm.scwm_ordim_c
+      WHERE lgnum = 'SZ01' AND procty = '1011' AND tostat = 'C' AND nltyp = 'AS01'
+        AND substr(cast(confirmed_at_wh AS STRING), 1, 8) BETWEEN '20260824' AND '20260920'
+    answer:
+      values: [{column: autostore_putaways, rel: 0.01}]
+
+  - id: c120
+    split: test
+    question: How many putaway tasks did Round Rock confirm in fiscal period 11 of FY2026?
+    role: ops_analyst_global
+    category: adhoc
+    expected_behavior: answer
+    trap_tags: [cancelled_tasks]
+    required_kb_docs: [guides/inbound_flow.md, sites/round_rock.md]
+    required_tables: [raw_sap_ewm.scwm_ordim_c]
+    reference_sql: |
+      SELECT COUNT(*) AS putaway_tasks
+      FROM raw_sap_ewm.scwm_ordim_c
+      WHERE lgnum = 'RR01' AND procty = '1011' AND tostat = 'C'
+        AND substr(cast(confirmed_at_wh AS STRING), 1, 8) BETWEEN '20260824' AND '20260920'
+    answer:
+      values: [{column: putaway_tasks, abs: 0}]
+
+  # ---------------------------------------------------------------- unfamiliar
+  - id: c121
+    question: How many products at Longgang are set up to be put away into the AutoStore?
+    role: ops_analyst_global
+    category: unfamiliar
+    expected_behavior: answer
+    trap_tags: []
+    required_kb_docs: [guides/inbound_flow.md]
+    required_tables: [raw_sap_ewm.sapapo_matlwh]
+    notes: Putaway control indicator ASTR in the warehouse product data of SZ01.
+    reference_sql: |
+      SELECT COUNT(*) AS autostore_products
+      FROM raw_sap_ewm.sapapo_matlwh
+      WHERE lgnum = 'SZ01' AND put_stra = 'ASTR'
+    answer:
+      values: [{column: autostore_products, abs: 0}]
+
+  - id: c122
+    split: test
+    question: How many of Longgang's inbound delivery items were for vendor-owned stock?
+    role: ops_analyst_global
+    category: unfamiliar
+    expected_behavior: answer
+    acceptable_behaviors: [answer, answer_with_assumption]
+    trap_tags: [consignment]
+    required_kb_docs: [guides/inbound_flow.md, concepts/stock_types.md]
+    required_tables: [raw_sap_ewm.scdl_db_proci_i, raw_sap_ewm.scdl_db_proch_i]
+    notes: Vendor consignment receipts carry the vendor as stock owner; all inbound deliveries in the extract.
+    reference_sql: |
+      SELECT COUNT(*) AS vendor_owned_items
+      FROM raw_sap_ewm.scdl_db_proci_i i
+      JOIN raw_sap_ewm.scdl_db_proch_i h ON h.docid = i.docid
+      WHERE h.lgnum = 'SZ01' AND i.owner <> 'CN10'
+    answer:
+      values: [{column: vendor_owned_items, abs: 0}]
+
+  # ---------------------------------------------------------------- traps
+  - id: c123
+    question: How many pick tasks were confirmed at Round Rock in fiscal period 11 of FY2026?
+    role: ops_analyst_global
+    category: trap
+    expected_behavior: answer
+    trap_tags: [task_types, cancelled_tasks]
+    required_kb_docs: [metrics/pick_cycle_time.md, guides/inbound_flow.md]
+    required_tables: [raw_sap_ewm.scwm_ordim_c]
+    notes: The task table also holds putaway tasks (1011); picks are process types 2010 and 2020.
+    reference_sql: |
+      SELECT COUNT(*) AS pick_tasks
+      FROM raw_sap_ewm.scwm_ordim_c
+      WHERE lgnum = 'RR01' AND tostat = 'C' AND procty IN ('2010', '2020')
+        AND substr(cast(confirmed_at_wh AS STRING), 1, 8) BETWEEN '20260824' AND '20260920'
+    answer:
+      values: [{column: pick_tasks, abs: 0}]
+
+  - id: c124
+    split: test
+    question: >-
+      Measured from the goods receipt posting in ECC, what was the median time until putaway was confirmed
+      for Round Rock receipts in fiscal period 11 of FY2026?
+    role: ops_analyst_global
+    category: trap
+    expected_behavior: answer
+    acceptable_behaviors: [answer, answer_with_assumption]
+    trap_tags: [timezone, cross_system_join]
+    required_kb_docs: [guides/inbound_flow.md, metrics/dock_to_stock_time.md, concepts/time_zones.md]
+    required_tables: [raw_sap_ecc.mseg, raw_sap_ecc.mkpf, raw_sap_ewm.scdl_db_refdoc, raw_sap_ewm.scwm_ordim_c]
+    notes: >-
+      ECC entry time (CPUDT/CPUTM) is America/Chicago; EWM CONFIRMED_AT is UTC. Without the conversion the
+      result is off by five or six hours. The governed dock-to-stock time (from the putaway task creation)
+      is within the tolerance.
+    reference_sql: |
+      WITH gr AS (
+        SELECT s.ebeln,
+               to_utc_timestamp(to_timestamp(concat(m.cpudt, m.cputm), 'yyyyMMddHHmmss'), 'America/Chicago')
+                 AS gr_utc,
+               m.budat
+        FROM raw_sap_ecc.mseg s
+        JOIN raw_sap_ecc.mkpf m ON m.mblnr = s.mblnr AND m.mjahr = s.mjahr
+        WHERE s.bwart = '101' AND s.werks = 'US10'
+      ),
+      putaway AS (
+        SELECT r.refdocno AS ebeln, to_timestamp(cast(t.confirmed_at AS STRING), 'yyyyMMddHHmmss') AS stored_utc
+        FROM raw_sap_ewm.scwm_ordim_c t
+        JOIN raw_sap_ewm.scdl_db_refdoc r ON r.docid = t.rdocid AND r.itemid = t.ritmid AND r.refdoccat = 'PO'
+        WHERE t.lgnum = 'RR01' AND t.procty = '1011' AND t.tostat = 'C'
+      )
+      SELECT percentile((unix_timestamp(p.stored_utc) - unix_timestamp(g.gr_utc)) / 60.0, 0.5) AS median_minutes
+      FROM gr g JOIN putaway p ON p.ebeln = g.ebeln
+      WHERE g.budat BETWEEN '20260824' AND '20260920'
+    answer:
+      values: [{column: median_minutes, rel: 0.06, unit: minutes}]
+
+  # ---------------------------------------------------------------- multi-step
+  - id: c125
+    question: >-
+      Which destination storage type at Round Rock had the slowest median dock-to-stock time in fiscal
+      period 11 of FY2026, and what was it?
+    role: ops_analyst_global
+    category: multi_step
+    expected_behavior: answer
+    acceptable_behaviors: [answer, answer_with_assumption]
+    trap_tags: [metric_definition]
+    required_kb_docs: [metrics/dock_to_stock_time.md, guides/inbound_flow.md]
+    required_tables: [raw_sap_ewm.scwm_ordim_c]
+    reference_sql: |
+      WITH putaway AS (
+        SELECT rdocid, ritmid,
+               MIN(created_at) AS gr_at, MIN(created_at_wh) AS gr_at_wh,
+               MAX(CASE WHEN tostat = 'C' THEN confirmed_at END) AS stored_at,
+               MAX(CASE WHEN tostat = 'C' THEN nltyp END) AS nltyp
+        FROM raw_sap_ewm.scwm_ordim_c
+        WHERE lgnum = 'RR01' AND procty = '1011' AND rdoccat = 'PDI'
+        GROUP BY rdocid, ritmid
+      )
+      SELECT nltyp,
+             percentile((unix_timestamp(to_timestamp(cast(stored_at AS STRING), 'yyyyMMddHHmmss'))
+                         - unix_timestamp(to_timestamp(cast(gr_at AS STRING), 'yyyyMMddHHmmss'))) / 60.0,
+                        0.5) AS median_minutes
+      FROM putaway
+      WHERE stored_at IS NOT NULL AND substr(cast(gr_at_wh AS STRING), 1, 8) BETWEEN '20260824' AND '20260920'
+      GROUP BY nltyp
+      ORDER BY median_minutes DESC
+      LIMIT 1
+    answer:
+      keys: [nltyp]
+      values: [{column: median_minutes, rel: 0.05, unit: minutes}]
+
+  # ---------------------------------------------------------------- investigation: injected scenario A2
+  - id: c126
+    split: test
+    question: >-
+      Some Round Rock receipts have been taking much longer to put away since the summer. Which products
+      are affected, since when, and what is the likely cause?
+    role: ops_analyst_global
+    category: investigation
+    expected_behavior: answer
+    acceptable_behaviors: [answer, answer_with_assumption]
+    trap_tags: [scenario_a2]
+    required_kb_docs: [guides/inbound_flow.md, metrics/dock_to_stock_time.md]
+    required_tables: [raw_sap_ewm.scwm_ordim_c, raw_sap_ewm.sapapo_matlwh, raw_sap_ewm.sapapo_matkey, raw_sap_ecc.mara]
+    notes: >-
+      Scenario A2: from 2026-06-29, fasteners (material group SP-FST) are put away to the high rack (0010,
+      PACI HRCK) instead of shelving, and wait for the reach truck. The answer must name the group and the
+      high-rack destination or the PACI.
+    reference_sql: |
+      SELECT MIN(substr(cast(t.created_at_wh AS STRING), 1, 8)) AS first_high_rack_putaway, COUNT(*) AS putaways
+      FROM raw_sap_ewm.scwm_ordim_c t
+      JOIN raw_sap_ewm.sapapo_matkey k ON k.matid = t.matid
+      JOIN raw_sap_ecc.mara a ON ltrim('0', a.matnr) = ltrim('0', k.matnr)
+      WHERE t.lgnum = 'RR01' AND t.procty = '1011' AND t.tostat = 'C' AND t.nltyp = '0010' AND a.matkl = 'SP-FST'
+    answer:
+      must_mention: [[SP-FST, fastener], ["0010", HRCK, high rack, high-rack]]
+
+  - id: c127
+    question: Putaway of fasteners (material group SP-FST) at Round Rock got slower this year. What changed, and when?
+    role: ops_analyst_global
+    category: investigation
+    expected_behavior: answer
+    acceptable_behaviors: [answer, answer_with_assumption]
+    trap_tags: [scenario_a2]
+    required_kb_docs: [guides/inbound_flow.md, metrics/dock_to_stock_time.md]
+    required_tables: [raw_sap_ewm.scwm_ordim_c, raw_sap_ewm.sapapo_matlwh, raw_sap_ewm.sapapo_matkey, raw_sap_ecc.mara]
+    notes: >-
+      Scenario A2. The answer must name the new destination (high rack 0010) or the PACI change, and the
+      timing (late June or early July 2026).
+    reference_sql: |
+      SELECT MIN(substr(cast(t.created_at_wh AS STRING), 1, 8)) AS first_high_rack_putaway, COUNT(*) AS putaways
+      FROM raw_sap_ewm.scwm_ordim_c t
+      JOIN raw_sap_ewm.sapapo_matkey k ON k.matid = t.matid
+      JOIN raw_sap_ecc.mara a ON ltrim('0', a.matnr) = ltrim('0', k.matnr)
+      WHERE t.lgnum = 'RR01' AND t.procty = '1011' AND t.tostat = 'C' AND t.nltyp = '0010' AND a.matkl = 'SP-FST'
+    answer:
+      must_mention: [["0010", HRCK, high rack, high-rack, PACI, putaway control], [June, July, "2026-06", "2026-07", "06-29", "06-30", "07-01"]]

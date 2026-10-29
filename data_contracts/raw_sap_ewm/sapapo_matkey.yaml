@@ -1,0 +1,16 @@
+table: raw_sap_ewm.sapapo_matkey
+layer: raw
+source_system: SAP_EWM
+description: Product key mapping in EWM (table /SAPAPO/MATKEY). Maps the internal product GUID (MATID) used by EWM tables to the product number. EWM product numbers are 40 characters, zero-padded, unlike the 18-character ECC material number.
+grain: One row per client and product GUID.
+primary_key: [mandt, matid]
+domain: MasterData
+subdomain: MasterData/Material
+sensitivity: internal
+columns:
+  - {name: mandt, type: STRING, nullable: false, sap_type: CLNT3, comment: "SAP client."}
+  - {name: matid, type: STRING, nullable: false, sap_type: RAW16, comment: "Product GUID (32 hexadecimal characters)."}
+  - {name: matnr, type: STRING, nullable: false, sap_type: CHAR40, comment: "Product number, zero-padded to 40 characters; strip leading zeros to compare with ECC material numbers."}
+tests:
+  unique: [[mandt, matnr]]
+access: [ops_analyst_global, site_manager_rr, site_manager_cn]

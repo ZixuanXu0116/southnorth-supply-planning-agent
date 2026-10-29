@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Thread{% endblock %}
+{% block content %}
+<h1>Thread</h1>
+<p class="muted">{{ role_label }} · as of {{ thread.as_of }} · started {{ thread.created_at[:16] | replace("T", " ") }} ·
+  <a href="/thread/{{ thread.id }}/export">download as JSON</a> · <a href="/">new thread</a></p>
+
+{% for turn in thread.turns %}
+{% set result = turn.result %}
+{% set answer = result.answer %}
+<div class="card" id="q{{ loop.index0 }}">
+  <div class="question">Q{{ loop.index }}. {{ turn.question }}</div>
+  <div class="meta">
+    {% if result.status == "answered" %}<span class="tag yes">answered</span>{% else %}<span class="tag no">{{ result.status }}{% if result.budget_reason %}: {{ result.budget_reason }}{% endif %}</span>{% endif %}
+    {% if answer %}<span class="tag">{{ answer.behavior }}</span><span class="tag">confidence {{ answer.confidence }}</span>{% endif %}
+    {% if result.faithfulness %}{% set f = result.faithfulness %}
+      <span class="tag {{ 'yes' if f.traced == f.checked else 'warn' }}">{{ f.traced }}/{{ f.checked }} numbers traced to a query</span>{% endif %}
+    {% if turn.flag %}<span class="tag no">flagged</span>{% endif %}
+  </div>
+  {% if answer %}
+    <div class="answer">{{ answer.answer | markdown }}</div>
+    {% if answer.clarifying_question %}<p><b>The agent asks:</b> {{ answer.clarifying_question }}</p>{% endif %}
+  {% elif result.final_text %}
+    <div class="answer">{{ result.final_text | markdown }}</div>
+  {% endif %}
+  {% if result.error %}<div class="error">{{ result.error }}</div>{% endif %}
+
+  {% if answer and answer["values"] %}
+  <details open><summary>Numbers ({{ answer["values"] | length }})</summary>
+    <table>
+      <tr><th>What</th><th class="num">Value</th><th>Unit</th><th>Query</th></tr>
+      {% for value in answer["values"] %}
+      <tr><td>{{ value.label }}</td><td class="num">{{ value.value }}</td><td>{{ value.unit or "" }}</td>
+        <td class="muted">{{ value.result_id or "(none)" }}</td></tr>
+      {% endfor %}
+    </table>
+  </details>
+  {% endif %}
+  {% if result.queries %}
+  <details><summary>SQL behind the numbers ({{ result.queries | length }})</summary>
+    {% for query in result.queries %}
+      <p class="muted">{{ query.result_id }}{% if query.metric_view %} · compiled from metric view {{ query.metric_view }}{% endif %}</p>
+      <pre>{{ query.sql }}</pre>
+    {% endfor %}
+  </details>
+  {% endif %}
+  {% if answer and (answer.assumptions or answer.definitions_used or answer.data_cutoff) %}
+  <details><summary>Assumptions and sources</summary>
+    {% if answer.assumptions %}<p><b>Assumptions</b></p><ul>{% for item in answer.assumptions %}<li>{{ item }}</li>{% endfor %}</ul>{% endif %}
+    {% if answer.definitions_used %}<p><b>Knowledge base</b></p><ul>{% for item in answer.definitions_used %}<li><code>kb/{{ item }}</code></li>{% endfor %}</ul>{% endif %}
+    {% if answer.data_cutoff %}<p><b>Data cut-off:</b> {{ answer.data_cutoff }}</p>{% endif %}
+  </details>
+  {% endif %}
+
+  <div class="meta">
+    <span>cost USD {{ "%.4f" | format(turn.cost_usd) }}{% if result.earlier %} (incl. re-asking {{ result.earlier | length }} earlier: USD {{ "%.4f" | format(result.earlier | sum(attribute="cost_usd")) }}){% endif %}</span>
+    <span>{{ result.turns }} turns</span><span>{{ result.sql_statements }} SQL</span><span>{{ result.wall_clock_s }} s</span>
+    {% if result.model %}<span>{{ result.model }}</span>{% endif %}
+    {% if result.prompt %}<span>prompt {{ result.prompt.name }}/{{ result.prompt.version }}</span>{% endif %}
+    {% if result.trace_path %}<span>trace {{ result.trace_path }}</span>{% endif %}
+  </div>
+
+  {% if turn.flag %}
+    <p class="muted">Flagged {{ turn.flag.at[:16] | replace("T", " ") }}: {{ turn.flag.note }}</p>
+  {% else %}
+  <details><summary>Flag this answer as wrong</summary>
+    <form method="post" action="/thread/{{ thread.id }}/turn/{{ loop.index0 }}/flag">
+      <label for="note{{ loop.index0 }}">What is wrong (what you expected)</label>
+      <textarea id="note{{ loop.index0 }}" name="note" required></textarea>
+      <button type="submit" class="secondary">Flag</button>
+    </form>
+  </details>
+  {% endif %}
+</div>
+{% endfor %}
+
+<div class="card">
+  {% if can_follow_up %}
+  <form class="ask" method="post" action="/thread/{{ thread.id }}/ask">
+    <label for="question">Follow-up question (asked in the same session after re-asking the {{ thread.turns | length }} earlier question{{ "s" if thread.turns | length != 1 }})</label>
+    <textarea id="question" name="question" maxlength="2000" required></textarea>
+    <button type="submit">Ask follow-up</button><span class="running">The agent is working; this can take a few minutes.</span>
+  </form>
+  {% else %}
+  <p class="muted">A thread holds at most {{ max_questions }} questions. <a href="/">Start a new thread.</a></p>
+  {% endif %}
+</div>
+{% endblock %}

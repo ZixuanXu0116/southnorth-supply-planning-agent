@@ -1,0 +1,26 @@
+table: raw_sap_ecc.vbup
+layer: raw
+source_system: SAP_ECC
+description: Item status of deliveries (SAP table VBUP). Status values - blank = not relevant, A = not processed, B = partially processed, C = completely processed.
+grain: One row per client, delivery, and item.
+primary_key: [mandt, vbeln, posnr]
+domain: Outbound
+subdomain: Outbound/Shipping
+sensitivity: internal
+columns:
+  - {name: mandt, type: STRING, nullable: false, sap_type: CLNT3, comment: "SAP client."}
+  - {name: vbeln, type: STRING, nullable: false, sap_type: CHAR10, comment: "Delivery number."}
+  - {name: posnr, type: STRING, nullable: false, sap_type: NUMC6, comment: "Delivery item number."}
+  - {name: gbsta, type: STRING, nullable: false, sap_type: CHAR1, comment: "Overall processing status of the item."}
+  - {name: kosta, type: STRING, nullable: false, sap_type: CHAR1, comment: "Picking status of the item."}
+  - {name: wbsta, type: STRING, nullable: false, sap_type: CHAR1, comment: "Goods movement status of the item."}
+  - {name: pdsta, type: STRING, nullable: false, sap_type: CHAR1, comment: "Proof-of-delivery status of the item; blank when not relevant."}
+tests:
+  accepted_values:
+    - {column: gbsta, values: [A, B, C]}
+    - {column: kosta, values: [A, B, C]}
+    - {column: wbsta, values: [A, B, C]}
+    - {column: pdsta, values: ["", A, C]}
+  relationships:
+    - {columns: [mandt, vbeln, posnr], references: raw_sap_ecc.lips, ref_columns: [mandt, vbeln, posnr]}
+access: [ops_analyst_global, site_manager_rr, site_manager_cn, trade_compliance]

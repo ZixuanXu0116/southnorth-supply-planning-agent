@@ -1,0 +1,155 @@
+# Retired on 2026-10-17 (decision record 003: no external customers, no export control): c146, c147, c148, c149, c150, c151, c152, c153.
+# Evaluation bank v6: bank v5 plus 14 cases on trade compliance at Round Rock and scenarios A6-A8 (c146-c159).
+# Owner review pending.
+#
+# Needs generator 0.6.0. The trade-compliance extract these cases read was removed in generator 0.8.0,
+# so only the A6-A8 cases remain.
+# A6 (duplicated replication of one Dongguan day) and A7 (seals sold in boxes from May 2026) are not
+# documented in the knowledge base; A8 seasonality is. Seven of the fourteen new cases are in the locked
+# test split.
+
+suite: bank_v6
+as_of: "2026-09-21"  # Monday, first day of FY2026 P12; ECC extracted 2026-09-21 05:00 UTC
+data_snapshot: {profile: small, generator_version: 0.8.0, seed: 20260924}
+includes: [bank_v5]
+
+cases:
+  # ---------------------------------------------------------------- trade compliance: ad hoc and unfamiliar
+  - id: c154
+    question: How many pick tasks did Dongguan confirm on January 14, 2026?
+    role: site_manager_cn
+    category: trap
+    expected_behavior: answer
+    acceptable_behaviors: [answer, answer_with_assumption]
+    trap_tags: [duplicate_records, timezone]
+    required_kb_docs: [sites/dongguan.md, concepts/time_zones.md]
+    required_tables: [raw_sap_ewm.scwm_ordim_c]
+    notes: >-
+      EWM replication delivered the day's tasks twice with new task numbers; every other field repeats the
+      original. The answer counts each task once and must say that duplicates were found. Discovery task
+      (owner adjudication 2026-10-19): the duplication is documented nowhere the agent can read, so the case
+      is reported outside the headline; c155 is the version whose question points at the anomaly.
+    discovery: true
+    reference_sql: |
+      SELECT COUNT(*) AS pick_tasks
+      FROM (
+        SELECT DISTINCT procty, rdocid, ritmid, matid, vsolm, vlpla, who, created_at, confirmed_at
+        FROM raw_sap_ewm.scwm_ordim_c
+        WHERE lgnum = 'DG01' AND tostat = 'C' AND procty IN ('2010', '2020')
+          AND substr(cast(confirmed_at_wh AS STRING), 1, 8) = '20260114'
+      ) t
+    answer:
+      values: [{column: pick_tasks, abs: 0}]
+      must_mention: [[duplicat, copies, copied, twice]]
+
+  - id: c155
+    split: test
+    question: >-
+      Dongguan's warehouse showed far more confirmed tasks on January 14, 2026 than on the days around it, while
+      its shipments that day looked normal. What happened?
+    role: site_manager_cn
+    category: investigation
+    expected_behavior: answer
+    acceptable_behaviors: [answer, answer_with_assumption]
+    trap_tags: [duplicate_records]
+    required_kb_docs: [sites/dongguan.md]
+    required_tables: [raw_sap_ewm.scwm_ordim_c]
+    notes: Scenario A6; the answer must identify the duplicated task records.
+    reference_sql: |
+      SELECT substr(cast(confirmed_at_wh AS STRING), 1, 8) AS local_day, COUNT(*) AS tasks
+      FROM raw_sap_ewm.scwm_ordim_c
+      WHERE lgnum = 'DG01' AND substr(cast(confirmed_at_wh AS STRING), 1, 8) BETWEEN '20260112' AND '20260116'
+      GROUP BY substr(cast(confirmed_at_wh AS STRING), 1, 8)
+    answer:
+      must_mention: [[duplicat, copies, copied]]
+
+  # ---------------------------------------------------------------- A7: sales unit change
+  - id: c156
+    question: How many seals (material group SP-SEL) did Longgang ship in April 2026 and in June 2026?
+    role: ops_analyst_global
+    category: trap
+    expected_behavior: answer
+    acceptable_behaviors: [answer, answer_with_assumption]
+    trap_tags: [unit_of_measure]
+    required_kb_docs: [concepts/units_of_measure.md, sites/longgang.md]
+    required_tables: [raw_sap_ecc.likp, raw_sap_ecc.lips, raw_sap_ecc.mara]
+    notes: >-
+      Pieces in the base unit (LIPS.LGMNG or MSEG.MENGE); from May 2026 many seal lines are in sales unit BOX,
+      so summing LFIMG undercounts June. Goods issue date in the calendar month.
+    reference_sql: |
+      SELECT SUM(CASE WHEN k.wadat_ist BETWEEN '20260401' AND '20260430' THEN p.lgmng ELSE 0 END) AS april_qty,
+             SUM(CASE WHEN k.wadat_ist BETWEEN '20260601' AND '20260630' THEN p.lgmng ELSE 0 END) AS june_qty
+      FROM raw_sap_ecc.lips p
+      JOIN raw_sap_ecc.likp k ON k.vbeln = p.vbeln
+      JOIN raw_sap_ecc.mara m ON m.matnr = p.matnr
+      WHERE k.vstel = 'C100' AND m.matkl = 'SP-SEL'
+    answer:
+      values: [{column: april_qty, rel: 0.01}, {column: june_qty, rel: 0.01}]
+
+  - id: c157
+    split: test
+    question: >-
+      The delivered quantity of seals (material group SP-SEL) on Longgang deliveries fell by about 80 % between
+      April and June 2026. Did demand for seals collapse?
+    role: ops_analyst_global
+    category: investigation
+    expected_behavior: answer
+    acceptable_behaviors: [answer, answer_with_assumption]
+    trap_tags: [unit_of_measure]
+    required_kb_docs: [concepts/units_of_measure.md]
+    required_tables: [raw_sap_ecc.likp, raw_sap_ecc.lips, raw_sap_ecc.mara]
+    notes: >-
+      Scenario A7: no. Seals are sold in boxes from May 2026, so sales-unit quantities (LFIMG) drop while
+      base-unit quantities (LGMNG) continue. The answer must name the box unit and the base unit.
+    reference_sql: |
+      SELECT substr(k.wadat_ist, 1, 6) AS month, SUM(p.lfimg) AS sales_unit_qty, SUM(p.lgmng) AS base_unit_qty
+      FROM raw_sap_ecc.lips p
+      JOIN raw_sap_ecc.likp k ON k.vbeln = p.vbeln
+      JOIN raw_sap_ecc.mara m ON m.matnr = p.matnr
+      WHERE k.vstel = 'C100' AND m.matkl = 'SP-SEL' AND k.wadat_ist BETWEEN '20260401' AND '20260630'
+      GROUP BY substr(k.wadat_ist, 1, 6)
+    answer:
+      must_mention: [[box], [base unit, LGMNG, MENGE, VSOLM, piece, EA, unit of measure, sales unit, UoM]]
+
+  # ---------------------------------------------------------------- A8: expected seasonality
+  - id: c158
+    question: Longgang shipped almost nothing from February 16 to February 24, 2026. Should we investigate that as an anomaly?
+    role: site_manager_cn
+    category: investigation
+    expected_behavior: answer
+    acceptable_behaviors: [answer, answer_with_assumption]
+    trap_tags: [seasonality]
+    required_kb_docs: [sites/longgang.md]
+    required_tables: [raw_sap_ecc.likp]
+    notes: Scenario A8a; no, it is the Chinese New Year shutdown and ramp-up (expected seasonality).
+    reference_sql: |
+      SELECT wadat_ist, COUNT(*) AS deliveries
+      FROM raw_sap_ecc.likp
+      WHERE vstel = 'C100' AND wadat_ist BETWEEN '20260209' AND '20260301'
+      GROUP BY wadat_ist
+    answer:
+      must_mention: [[Chinese New Year, Spring Festival, Lunar New Year, CNY holiday, CNY shutdown, CNY period]]
+
+  - id: c159
+    split: test
+    question: >-
+      Round Rock shipped noticeably more delivery lines in the week of July 20, 2026 than in the weeks before. Is
+      that an anomaly?
+    role: ops_analyst_global
+    category: investigation
+    expected_behavior: answer
+    acceptable_behaviors: [answer, answer_with_assumption]
+    trap_tags: [seasonality, fiscal_calendar]
+    required_kb_docs: [concepts/fiscal_calendar.md, metrics/lines_shipped.md]
+    required_tables: [raw_sap_ecc.likp, raw_sap_ecc.lips]
+    notes: >-
+      Scenario A8b; no, 2026-07-20 to 2026-07-26 is the last week of FY2026 Q3 and every fiscal quarter ends with
+      a shipping push (expected seasonality).
+    reference_sql: |
+      SELECT weekofyear(to_date(k.wadat_ist, 'yyyyMMdd')) AS iso_week, COUNT(*) AS lines
+      FROM raw_sap_ecc.lips p
+      JOIN raw_sap_ecc.likp k ON k.vbeln = p.vbeln
+      WHERE k.vstel = 'U100' AND k.wadat_ist BETWEEN '20260629' AND '20260726'
+      GROUP BY weekofyear(to_date(k.wadat_ist, 'yyyyMMdd'))
+    answer:
+      must_mention: [[quarter-end, quarter end, end of the quarter, end of the fiscal quarter, end of fiscal quarter, end of each quarter, end of every quarter, end of Q3, end of fiscal Q3, quarter close, quarter-close, last week of the quarter, last weeks of the quarter, last days of the quarter]]

@@ -1,0 +1,91 @@
+# Unity Catalog metric view. `definition` is deployed as YAML 1.1 to <catalog>.semantic.<name>
+# (`snm-data build`); the other keys are project metadata: the roles that may query it and the
+# knowledge-base documents whose definitions it implements.
+name: mv_supplier_delivery
+access: [ops_analyst_global, site_manager_rr, site_manager_cn]
+kb: [metrics/supplier_on_time_delivery.md]
+definition:
+  version: 1.1
+  comment: >-
+    Purchase order schedule lines and supplier on-time delivery, by the date of the order's first goods receipt.
+    On time means the first receipt was no later than one day after the agreed delivery date. The rate covers
+    received lines only; filter order_type = 'standard' for the governed supplier on-time delivery rate (expedited
+    emergency buys are received the same day by construction). Overdue open lines are reported separately.
+  source: "{catalog}.curated.fct_purchase_schedule_line"
+  dimensions:
+    - name: company_code
+      expr: company_code
+      comment: "Company code: 1000 (US) or 2000 (China)."
+    - name: plant
+      expr: plant
+      comment: "Receiving plant: US10 or CN10."
+    - name: site
+      expr: site
+      comment: "Receiving site: Round Rock, Longgang, or Dongguan."
+    - name: order_type
+      expr: order_type
+      comment: "standard (NB) or expedited (ZEX)."
+    - name: vendor
+      expr: vendor
+      comment: "Vendor number."
+    - name: vendor_name
+      expr: vendor_name
+      comment: "Vendor name."
+    - name: vendor_country
+      expr: vendor_country
+      comment: "Vendor country code."
+    - name: material
+      expr: material
+      comment: "Material number without leading zeros."
+    - name: agreed_delivery_date
+      expr: agreed_delivery_date
+      comment: "Agreed delivery date."
+    - name: first_receipt_date
+      expr: first_receipt_date
+      comment: "Date of the order's first goods receipt (site-local); filter with a range for calendar periods."
+    - name: is_received
+      expr: is_received
+      comment: "At least one goods receipt posted."
+    - name: is_fully_received
+      expr: is_fully_received
+      comment: "Received quantity covers the scheduled quantity."
+    - name: is_overdue_open
+      expr: is_overdue_open
+      comment: "Not fully received and the agreed date is before the data cut-off."
+    - name: fiscal_year
+      expr: receipt_fiscal_year
+      comment: "Fiscal year of the first receipt date."
+    - name: fiscal_quarter
+      expr: receipt_fiscal_quarter
+      comment: "Fiscal quarter (1-4) of the first receipt date."
+    - name: fiscal_period
+      expr: receipt_fiscal_period
+      comment: "Fiscal period (1-12) of the first receipt date."
+    - name: fiscal_week
+      expr: receipt_fiscal_week
+      comment: "Fiscal week (1-53, Monday to Sunday) of the first receipt date."
+  measures:
+    - name: schedule_lines
+      expr: COUNT(1)
+      comment: "Purchase order schedule lines."
+    - name: received_lines
+      expr: COUNT_IF(is_received)
+      comment: "Lines whose order has a goods receipt."
+    - name: on_time_lines
+      expr: COUNT_IF(is_received AND is_on_time)
+      comment: "Received lines whose first receipt was on time."
+    - name: late_lines
+      expr: COUNT_IF(is_received AND NOT is_on_time)
+      comment: "Received lines whose first receipt was late."
+    - name: on_time_rate
+      expr: try_divide(COUNT_IF(is_received AND is_on_time), COUNT_IF(is_received))
+      comment: "Supplier on-time delivery rate: on-time received lines / received lines, a fraction between 0 and 1."
+    - name: overdue_open_lines
+      expr: COUNT_IF(is_overdue_open)
+      comment: "Lines not fully received whose agreed date has passed."
+    - name: scheduled_qty
+      expr: SUM(scheduled_qty)
+      comment: "Scheduled quantity, base units."
+    - name: received_qty
+      expr: SUM(received_qty)
+      comment: "Received quantity, base units."

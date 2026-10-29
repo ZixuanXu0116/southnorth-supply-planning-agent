@@ -1,0 +1,16 @@
+table: raw_sap_ecc.lfa1
+layer: raw
+source_system: SAP_ECC
+description: Vendor master, general data (SAP table LFA1). Fictional suppliers.
+grain: One row per client and vendor.
+primary_key: [mandt, lifnr]
+domain: Procurement
+subdomain: Procurement/Suppliers
+sensitivity: internal
+columns:
+  - {name: mandt, type: STRING, nullable: false, sap_type: CLNT3, comment: "SAP client."}
+  - {name: lifnr, type: STRING, nullable: false, sap_type: CHAR10, comment: "Vendor number."}
+  - {name: name1, type: STRING, nullable: false, sap_type: CHAR35, comment: "Vendor name."}
+  - {name: land1, type: STRING, nullable: false, sap_type: CHAR3, comment: "Country key (ISO alpha-2)."}
+  - {name: ort01, type: STRING, nullable: false, sap_type: CHAR35, comment: "City."}
+access: [ops_analyst_global, site_manager_rr, site_manager_cn]

@@ -1,0 +1,30 @@
+table: raw_sap_ecc.mard
+layer: raw
+source_system: SAP_ECC
+description: Storage-location stock of own materials (SAP table MARD) as of the nightly ECC extraction, with storage-location MRP settings for the Dongguan overflow hub (the main warehouses carry their minimum and maximum in MARC). Vendor consignment stock is in MKOL, not here.
+grain: One row per client, material, plant, and storage location the material is extended to.
+primary_key: [mandt, matnr, werks, lgort]
+domain: Inventory
+subdomain: Inventory/Stock
+sensitivity: internal
+site_key: {column: werks, kind: plant}
+columns:
+  - {name: mandt, type: STRING, nullable: false, sap_type: CLNT3, comment: "SAP client."}
+  - {name: matnr, type: STRING, nullable: false, sap_type: CHAR18, comment: "Material number."}
+  - {name: werks, type: STRING, nullable: false, sap_type: CHAR4, comment: "Plant."}
+  - {name: lgort, type: STRING, nullable: false, sap_type: CHAR4, comment: "Storage location."}
+  - {name: labst, type: "DECIMAL(13,3)", nullable: false, sap_type: QUAN13_3, comment: "Unrestricted-use stock in base unit."}
+  - {name: insme, type: "DECIMAL(13,3)", nullable: false, sap_type: QUAN13_3, comment: "Stock in quality inspection in base unit."}
+  - {name: speme, type: "DECIMAL(13,3)", nullable: false, sap_type: QUAN13_3, comment: "Blocked stock in base unit."}
+  - {name: umlme, type: "DECIMAL(13,3)", nullable: false, sap_type: QUAN13_3, comment: "Stock in transfer to this storage location (two-step transfer posted out, not yet received)."}
+  - {name: diskz, type: STRING, nullable: false, sap_type: CHAR1, comment: "Storage location MRP indicator: 2 = reorder point planning at storage-location level (the Dongguan overflow hub 3000); blank = planned at plant level."}
+  - {name: lminb, type: "DECIMAL(13,3)", nullable: false, sap_type: QUAN13_3, comment: "Reorder point for storage-location MRP."}
+  - {name: lbstf, type: "DECIMAL(13,3)", nullable: false, sap_type: QUAN13_3, comment: "Replenishment quantity for storage-location MRP."}
+tests:
+  accepted_values:
+    - {column: werks, values: [US10, CN10]}
+    - {column: diskz, values: ["", "2"]}
+  relationships:
+    - {columns: [mandt, matnr], references: raw_sap_ecc.mara, ref_columns: [mandt, matnr]}
+    - {columns: [mandt, werks, lgort], references: raw_sap_ecc.t001l, ref_columns: [mandt, werks, lgort]}
+access: [ops_analyst_global, site_manager_rr, site_manager_cn]

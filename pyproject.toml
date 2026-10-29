@@ -1,0 +1,40 @@
+[project]
+name = "snm-workspace"
+version = "0.0.0"
+description = "Workspace root for SouthNorth Solutions analytics agent Python packages."
+requires-python = ">=3.11,<3.12"
+dependencies = ["snm-ask", "snm-cases", "snm-data", "snm-evals", "snm-tools", "snm-web"]
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["apps/ask", "apps/web", "case_server", "data", "evals", "tool_server"]
+
+[tool.uv.sources]
+snm-ask = { workspace = true }
+snm-cases = { workspace = true }
+snm-data = { workspace = true }
+snm-evals = { workspace = true }
+snm-tools = { workspace = true }
+snm-web = { workspace = true }
+
+[dependency-groups]
+dev = ["pytest>=9.0", "ruff>=0.16"]
+
+[tool.pytest.ini_options]
+testpaths = ["apps/ask/tests", "apps/web/tests", "case_server/tests", "data/tests", "evals/tests", "tool_server/tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["fastapi.File", "fastapi.Form"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["snm_ask", "snm_cases", "snm_data", "snm_evals", "snm_tools", "snm_web"]

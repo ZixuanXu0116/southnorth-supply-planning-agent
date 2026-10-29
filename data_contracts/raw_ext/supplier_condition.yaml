@@ -1,0 +1,23 @@
+table: raw_ext.supplier_condition
+layer: raw
+source_system: PURCHASING
+description: Expedite terms agreed with each vendor (the purchasing team's condition sheet), with the minimum expedite lead time, surcharge tiers by days gained, expedited freight, the strategic-supplier flag, and whether the vendor is onboarded to the supplier portal. Fictional terms.
+grain: One row per vendor.
+primary_key: [lifnr]
+domain: Procurement
+subdomain: Procurement/Suppliers
+sensitivity: internal
+columns:
+  - {name: lifnr, type: STRING, nullable: false, sap_type: CHAR10, comment: "Vendor number (LFA1)."}
+  - {name: strategic, type: BOOLEAN, nullable: false, comment: "Strategic supplier: handled by purchasing staff, never by the intake agent."}
+  - {name: min_expedite_days, type: INT, nullable: false, comment: "Shortest lead time in calendar days the vendor can deliver against when expedited."}
+  - {name: surcharge_pct_lt7, type: "DECIMAL(15,2)", nullable: false, sensitivity: commercial, comment: "Expedite surcharge in percent of the line value when fewer than 7 days are gained."}
+  - {name: surcharge_pct_7_13, type: "DECIMAL(15,2)", nullable: false, sensitivity: commercial, comment: "Expedite surcharge in percent of the line value when 7 to 13 days are gained."}
+  - {name: surcharge_pct_ge14, type: "DECIMAL(15,2)", nullable: false, sensitivity: commercial, comment: "Expedite surcharge in percent of the line value when 14 or more days are gained."}
+  - {name: expedite_freight_usd, type: "DECIMAL(15,2)", nullable: false, sensitivity: commercial, comment: "Expedited freight per shipment in USD."}
+  - {name: portal_onboarded, type: BOOLEAN, nullable: false, comment: "Vendor has access to the supplier portal (intake agent)."}
+  - {name: valid_from, type: DATE, nullable: false, comment: "Start of validity of these terms."}
+tests:
+  relationships:
+    - {columns: [lifnr], references: raw_sap_ecc.lfa1, ref_columns: [lifnr]}
+access: [ops_analyst_global, site_manager_rr, site_manager_cn, purchasing]

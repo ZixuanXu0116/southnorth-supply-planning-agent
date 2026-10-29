@@ -1,0 +1,17 @@
+table: raw_sap_ecc.t009
+layer: raw
+source_system: SAP_ECC
+description: Fiscal year variants (SAP table T009). Variant Z5 is the company-wide 52/53-week fiscal year ending on the last Sunday of October.
+grain: One row per client and fiscal year variant.
+primary_key: [mandt, periv]
+domain: MasterData
+subdomain: MasterData/Calendar
+sensitivity: internal
+columns:
+  - {name: mandt, type: STRING, nullable: false, sap_type: CLNT3, comment: "SAP client."}
+  - {name: periv, type: STRING, nullable: false, sap_type: CHAR2, comment: "Fiscal year variant."}
+  - {name: xkale, type: STRING, nullable: false, sap_type: CHAR1, comment: "'X' if the fiscal year equals the calendar year; blank otherwise."}
+  - {name: xjabh, type: STRING, nullable: false, sap_type: CHAR1, comment: "'X' if period boundaries are year-dependent (required for 52/53-week years)."}
+  - {name: anzbp, type: STRING, nullable: false, sap_type: NUMC3, comment: "Number of regular posting periods."}
+  - {name: anzsp, type: STRING, nullable: false, sap_type: NUMC2, comment: "Number of special periods."}
+access: [ops_analyst_global, site_manager_rr, site_manager_cn, trade_compliance]

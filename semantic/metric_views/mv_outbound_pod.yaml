@@ -1,0 +1,56 @@
+# Unity Catalog metric view. `definition` is deployed as YAML 1.1 to <catalog>.semantic.<name>
+# (`snm-data build`); the other keys are project metadata: the roles that may query it and the
+# knowledge-base documents whose definitions it implements.
+name: mv_outbound_pod
+access: [ops_analyst_global, site_manager_rr, site_manager_cn]
+kb: [metrics/otd_pod.md]
+definition:
+  version: 1.1
+  comment: >-
+    Proof-of-delivery (POD) based on-time delivery of outbound deliveries that require a receipt confirmation by the
+    receiving work center of the manufacturing department, by planned delivery date at the production supply area.
+    Deliveries still waiting for the POD are counted separately and are not in the rate's denominator. Deliveries
+    without POD relevance are not covered; say so when asked about all deliveries.
+  source: "{catalog}.curated.fct_outbound_delivery"
+  filter: is_pod_relevant
+  dimensions:
+    - name: site
+      expr: site
+      comment: "Shipping site: Round Rock, Longgang, or Dongguan."
+    - name: shipping_point
+      expr: shipping_point
+      comment: "Shipping point: U100 Round Rock, C100 Longgang, C300 Dongguan."
+    - name: work_center
+      expr: work_center
+      comment: "Receiving work center of the manufacturing department (there are no external customers)."
+    - name: planned_delivery_date
+      expr: planned_delivery_date
+      comment: "Planned delivery date at the production supply area; filter with a range for calendar months or weeks."
+    - name: is_pod_confirmed
+      expr: is_pod_confirmed
+      comment: "Proof of delivery received."
+    - name: fiscal_year
+      expr: delivery_fiscal_year
+      comment: "Fiscal year of the planned delivery date."
+    - name: fiscal_quarter
+      expr: delivery_fiscal_quarter
+      comment: "Fiscal quarter (1-4) of the planned delivery date."
+    - name: fiscal_period
+      expr: delivery_fiscal_period
+      comment: "Fiscal period (1-12) of the planned delivery date."
+    - name: fiscal_week
+      expr: delivery_fiscal_week
+      comment: "Fiscal week (1-53, Monday to Sunday) of the planned delivery date."
+  measures:
+    - name: pod_relevant_deliveries
+      expr: COUNT(1)
+      comment: "Deliveries that require a receipt confirmation (proof of delivery) by the work center."
+    - name: pod_confirmed
+      expr: COUNT_IF(is_pod_confirmed)
+      comment: "Deliveries with a confirmed proof of delivery."
+    - name: pod_pending
+      expr: COUNT_IF(NOT is_pod_confirmed)
+      comment: "Deliveries still waiting for the proof of delivery (not in the rate)."
+    - name: on_time_delivery_rate
+      expr: try_divide(COUNT_IF(is_delivered_on_time), COUNT_IF(is_pod_confirmed))
+      comment: "Share of confirmed deliveries whose POD date is on or before the planned delivery date, a fraction between 0 and 1."

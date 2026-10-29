@@ -1,0 +1,466 @@
+# Retired on 2026-10-17 (decision record 003: no external customers, no export control): c170, c171, c172, c173, c181.
+# Evaluation bank v8: bank v7 plus 23 cases (c164-c186) on generator 0.7.0: manufacturing demand
+# (production orders, reservations, planned orders, the production supply area 2100), the replenishment
+# engine's planning tables and metric views, and the injected scenarios A3 (Dongguan spoke parameters too
+# low), A4 (Round Rock wave policy change), and A5 (export reclassification). Owner review pending.
+#
+# Needs generator 0.7.0 and a published engine run (snm-data plan) for 2026-09-21. Commercial columns of the
+# planning tables (values, costs, surcharges) are masked for every provisioned role, so the value-at-risk case
+# expects policy_restricted. The A4 policy change is documented in the knowledge base (site page and the
+# wave-to-PGI metric page); A3 and A5 are not. Nine of the 23 new cases are in the locked test split.
+
+suite: bank_v8
+as_of: "2026-09-21"  # Monday, first day of FY2026 P12; ECC extracted 2026-09-21 05:00 UTC
+data_snapshot: {profile: small, generator_version: 0.8.0, seed: 20260924}
+includes: [bank_v7]
+
+# Fiscal periods of FY2026 used below: P8 2026-05-25..06-21, P9 06-22..07-26, P10 07-27..08-23,
+# P11 08-24..09-20.
+
+cases:
+  # ---------------------------------------------------------------- scenario A3: Dongguan spoke parameters
+  - id: c164
+    question: >-
+      How many emergency stock transfers from Longgang to Dongguan were posted in each of fiscal periods 8
+      to 11 of FY2026, for gas-line parts (material group SP-GAS) versus all other groups?
+    role: ops_analyst_global
+    category: adhoc
+    expected_behavior: answer
+    trap_tags: [system_users, transfer_double_count, fiscal_calendar]
+    required_kb_docs: [concepts/internal_transfers.md, concepts/fiscal_calendar.md, sites/dongguan.md]
+    required_tables: [raw_sap_ecc.mseg, raw_sap_ecc.mkpf, raw_sap_ecc.mara]
+    notes: >-
+      Emergency transfers are the 313 documents posted by RFC-EWM (planned ones by WF-BATCH). Count documents
+      (the issuing item, SHKZG = H), not both items. Scenario A3 starts 2026-06-15, so the SP-GAS count jumps
+      from period 9 on while the other groups stay flat.
+    reference_sql: |
+      WITH periods AS (
+        SELECT 8 AS fiscal_period, '20260525' AS first_day, '20260621' AS last_day
+        UNION ALL SELECT 9, '20260622', '20260726'
+        UNION ALL SELECT 10, '20260727', '20260823'
+        UNION ALL SELECT 11, '20260824', '20260920'
+      )
+      SELECT p.fiscal_period,
+             CASE WHEN a.matkl = 'SP-GAS' THEN 'SP-GAS' ELSE 'other' END AS material_group,
+             COUNT(*) AS emergency_transfers
+      FROM raw_sap_ecc.mseg m
+      JOIN raw_sap_ecc.mkpf h ON h.mblnr = m.mblnr AND h.mjahr = m.mjahr
+      JOIN raw_sap_ecc.mara a ON a.matnr = m.matnr
+      JOIN periods p ON m.budat_mkpf BETWEEN p.first_day AND p.last_day
+      WHERE m.werks = 'CN10' AND m.bwart = '313' AND m.shkzg = 'H' AND m.umlgo = '3000' AND h.usnam = 'RFC-EWM'
+      GROUP BY p.fiscal_period, material_group
+    answer:
+      keys: [fiscal_period, material_group]
+      values: [{column: emergency_transfers, abs: 0}]
+
+  - id: c165
+    question: >-
+      Since the summer Dongguan keeps running out of gas-line parts (material group SP-GAS) and needs
+      emergency transfers almost every day. What changed, and when?
+    role: site_manager_cn
+    category: investigation
+    expected_behavior: answer
+    acceptable_behaviors: [answer, answer_with_assumption]
+    trap_tags: [scenario_a3]
+    required_kb_docs: [concepts/internal_transfers.md, sites/dongguan.md, concepts/stock_types.md]
+    required_tables: [raw_sap_ecc.mseg, raw_sap_ecc.mkpf, raw_sap_ecc.mard, raw_sap_ecc.mara]
+    notes: >-
+      Scenario A3: from 2026-06-15 the storage-location MRP parameters of SP-GAS at CN10/3000 (reorder
+      point MARD.LMINB and replenishment quantity MARD.LBSTF) are about a tenth of their intended values
+      (one or two pieces against several pieces of daily demand), so scheduled transfers start only when the
+      spoke is empty and the demand of the day is served by emergency transfers. The answer must point at the
+      replenishment parameters (or the reorder point / replenishment quantity) and at mid-June 2026.
+    reference_sql: |
+      SELECT MIN(m.budat_mkpf) AS first_day, COUNT(*) AS emergency_transfers_since
+      FROM raw_sap_ecc.mseg m
+      JOIN raw_sap_ecc.mkpf h ON h.mblnr = m.mblnr AND h.mjahr = m.mjahr
+      JOIN raw_sap_ecc.mara a ON a.matnr = m.matnr
+      WHERE m.werks = 'CN10' AND m.bwart = '313' AND m.shkzg = 'H' AND m.umlgo = '3000'
+        AND h.usnam = 'RFC-EWM' AND a.matkl = 'SP-GAS' AND m.budat_mkpf >= '20260615'
+    answer:
+      must_mention:
+        - [reorder point, LMINB, LBSTF, replenishment quantity, replenishment parameter, MRP parameter,
+           storage location MRP, min/max, minimum stock]
+        - [June, "2026-06", mid-June]
+
+  - id: c166
+    split: test
+    question: >-
+      How many units reached Dongguan through emergency transfers in fiscal period 11 of FY2026, and what
+      share of all hub-to-spoke replenishment quantity in that period was that?
+    role: ops_analyst_global
+    category: trap
+    expected_behavior: answer
+    trap_tags: [transfer_double_count, system_users, fiscal_calendar]
+    required_kb_docs: [concepts/internal_transfers.md, concepts/fiscal_calendar.md]
+    required_tables: [raw_sap_ecc.mseg, raw_sap_ecc.mkpf]
+    notes: >-
+      Hub-to-spoke replenishment is the 313 removal from CN10/1000 to 3000 (SHKZG = H); emergency transfers
+      are the ones posted by RFC-EWM. Counting the receiving 313 item or the 315 placement as well doubles
+      the quantities. Period 11 is 2026-08-24 to 2026-09-20.
+    reference_sql: |
+      SELECT ROUND(SUM(CASE WHEN h.usnam = 'RFC-EWM' THEN m.menge ELSE 0 END), 3) AS emergency_quantity,
+             ROUND(SUM(CASE WHEN h.usnam = 'RFC-EWM' THEN m.menge ELSE 0 END) / SUM(m.menge), 4) AS emergency_share
+      FROM raw_sap_ecc.mseg m
+      JOIN raw_sap_ecc.mkpf h ON h.mblnr = m.mblnr AND h.mjahr = m.mjahr
+      WHERE m.werks = 'CN10' AND m.bwart = '313' AND m.shkzg = 'H' AND m.umlgo = '3000'
+        AND m.budat_mkpf BETWEEN '20260824' AND '20260920'
+    answer:
+      values:
+        - {column: emergency_quantity, abs: 0.5}
+        - {column: emergency_share, abs: 0.01}
+
+  # ---------------------------------------------------------------- scenario A4: Round Rock wave policy
+  - id: c167
+    question: >-
+      On the days Round Rock released picking waves, how many waves did it release per day on average in
+      fiscal period 8 of FY2026, and how many in fiscal period 11?
+    role: site_manager_rr
+    category: adhoc
+    expected_behavior: answer
+    acceptable_behaviors: [answer, answer_with_assumption]
+    trap_tags: [fiscal_calendar, timezone]
+    required_kb_docs: [sites/round_rock.md, concepts/fiscal_calendar.md, concepts/time_zones.md]
+    required_tables: [raw_sap_ewm.scwm_wavehdr]
+    notes: >-
+      Waves per day with at least one wave, by the warehouse-local release day (released_at_wh). Period 8
+      (2026-05-25 to 06-21) is under the hourly policy, period 11 (08-24 to 09-20) under the twice-daily
+      policy that started 2026-07-13, so the average drops from about five to under two.
+    reference_sql: |
+      WITH waves AS (
+        SELECT substr(CAST(released_at_wh AS STRING), 1, 8) AS day
+        FROM raw_sap_ewm.scwm_wavehdr
+        WHERE lgnum = 'RR01'
+      )
+      SELECT CASE WHEN day BETWEEN '20260525' AND '20260621' THEN 8 ELSE 11 END AS fiscal_period,
+             ROUND(COUNT(*) / COUNT(DISTINCT day), 2) AS waves_per_day
+      FROM waves
+      WHERE day BETWEEN '20260525' AND '20260621' OR day BETWEEN '20260824' AND '20260920'
+      GROUP BY 1
+    answer:
+      keys: [fiscal_period]
+      values: [{column: waves_per_day, rel: 0.1}]
+
+  - id: c168
+    question: >-
+      Round Rock's wave-to-PGI lead time and its pick cycle times got noticeably worse over the summer. Is
+      the warehouse underperforming, and what explains the change?
+    role: ops_analyst_global
+    category: investigation
+    expected_behavior: answer
+    acceptable_behaviors: [answer, answer_with_assumption]
+    trap_tags: [scenario_a4, metric_definition]
+    required_kb_docs: [sites/round_rock.md, metrics/wave_to_pgi_lead_time.md, metrics/pick_cycle_time.md]
+    required_tables: [raw_sap_ewm.scwm_wavehdr, raw_sap_ewm.scwm_ordim_c]
+    notes: >-
+      Scenario A4: from 2026-07-13 Round Rock releases two waves a day (10:00 and 16:00 local, template
+      RR-2XDAY) instead of hourly. Tasks queue longer and ship later while picks per task get faster; the
+      knowledge base documents it as a policy change, not a fault. The answer must name the policy or
+      template change and place it in July 2026.
+    reference_sql: |
+      SELECT tmplt,
+             MIN(substr(CAST(released_at_wh AS STRING), 1, 8)) AS first_day,
+             MAX(substr(CAST(released_at_wh AS STRING), 1, 8)) AS last_day,
+             COUNT(*) AS waves
+      FROM raw_sap_ewm.scwm_wavehdr
+      WHERE lgnum = 'RR01' AND substr(CAST(released_at_wh AS STRING), 1, 8) >= '20260525'
+      GROUP BY tmplt
+    answer:
+      must_mention:
+        - [RR-2XDAY, twice a day, twice daily, two waves, two per day, 2 per day, wave policy, wave template,
+           release policy, "10:00"]
+        - [July, "2026-07", "07-13", 13 July]
+
+  - id: c169
+    split: test
+    question: >-
+      What was the median time a Round Rock pick task waited between creation and start in fiscal period 11
+      of FY2026, compared with fiscal period 8?
+    role: site_manager_rr
+    category: adhoc
+    expected_behavior: answer
+    trap_tags: [cancelled_tasks, fiscal_calendar, timezone]
+    required_kb_docs: [metrics/pick_cycle_time.md, sites/round_rock.md, concepts/fiscal_calendar.md]
+    required_tables: [raw_sap_ewm.scwm_ordim_c]
+    notes: >-
+      Queue time of confirmed pick tasks (process types 2010 and 2020, status C): started_at minus
+      created_at, both UTC; periods by the warehouse-local creation day. Cancelled tasks have no start and
+      are left out. The median roughly doubles with the wave policy change (A4).
+    reference_sql: |
+      SELECT CASE WHEN substr(CAST(created_at_wh AS STRING), 1, 8) BETWEEN '20260525' AND '20260621' THEN 8
+                  ELSE 11 END AS fiscal_period,
+             ROUND(percentile((unix_timestamp(to_timestamp(CAST(started_at AS STRING), 'yyyyMMddHHmmss'))
+                               - unix_timestamp(to_timestamp(CAST(created_at AS STRING), 'yyyyMMddHHmmss'))) / 60.0,
+                              0.5), 2) AS median_queue_minutes
+      FROM raw_sap_ewm.scwm_ordim_c
+      WHERE lgnum = 'RR01' AND tostat = 'C' AND procty IN ('2010', '2020')
+        AND (substr(CAST(created_at_wh AS STRING), 1, 8) BETWEEN '20260525' AND '20260621'
+             OR substr(CAST(created_at_wh AS STRING), 1, 8) BETWEEN '20260824' AND '20260920')
+      GROUP BY 1
+    answer:
+      keys: [fiscal_period]
+      values: [{column: median_queue_minutes, rel: 0.05, unit: minutes}]
+
+  # ---------------------------------------------------------------- scenario A5: export reclassification
+  - id: c174
+    question: How many production orders were released at each plant in fiscal period 11 of FY2026?
+    role: ops_analyst_global
+    category: unfamiliar
+    expected_behavior: answer
+    trap_tags: [fiscal_calendar]
+    required_kb_docs: [concepts/production_supply.md, concepts/fiscal_calendar.md]
+    required_tables: [raw_sap_ecc.afko, raw_sap_ecc.afpo]
+    notes: >-
+      The release date is AFKO.FTRMI; the plant is AFPO.PWERK. Period 11 is 2026-08-24 to 2026-09-20.
+    reference_sql: |
+      SELECT p.pwerk AS plant, COUNT(*) AS orders_released
+      FROM raw_sap_ecc.afko o
+      JOIN raw_sap_ecc.afpo p ON p.aufnr = o.aufnr
+      WHERE o.ftrmi BETWEEN '20260824' AND '20260920'
+      GROUP BY p.pwerk
+    answer:
+      keys: [plant]
+      values: [{column: orders_released, abs: 0}]
+
+  - id: c175
+    split: test
+    question: >-
+      What quantity of components is still reserved for production orders due at Round Rock in the next two
+      weeks, and across how many orders?
+    role: ops_analyst_global
+    category: unfamiliar
+    expected_behavior: answer
+    acceptable_behaviors: [answer, answer_with_assumption]
+    trap_tags: [data_freshness]
+    required_kb_docs: [concepts/production_supply.md]
+    required_tables: [raw_sap_ecc.resb]
+    notes: >-
+      Open reservation quantity = BDMNG minus ENMNG of production-order reservations (BDART = SB, XLOEK
+      blank) with a requirement date from 2026-09-21 to 2026-10-04 at plant US10; orders counted by AUFNR.
+    reference_sql: |
+      SELECT ROUND(SUM(bdmng - enmng), 3) AS open_quantity, COUNT(DISTINCT aufnr) AS orders
+      FROM raw_sap_ecc.resb
+      WHERE werks = 'US10' AND bdart = 'SB' AND xloek = '' AND bdter BETWEEN '20260921' AND '20261004'
+    answer:
+      values:
+        - {column: open_quantity, abs: 0.5}
+        - {column: orders, abs: 0}
+
+  - id: c176
+    question: >-
+      How much component stock was sitting in the Longgang assembly's production supply area at the end of
+      2026-09-20, and for how many materials?
+    role: ops_analyst_global
+    category: unfamiliar
+    expected_behavior: answer
+    trap_tags: [stock_types, data_freshness]
+    required_kb_docs: [concepts/production_supply.md, concepts/stock_types.md, sites/longgang.md]
+    required_tables: [raw_ext.inventory_snapshot_daily]
+    notes: >-
+      The production supply area is storage location CN10/2100 (staged but not yet consumed components);
+      the daily inventory snapshot of 2026-09-20 is the stock at the end of that day. MARD.LABST is not:
+      the ECC extraction (00:00 America/Chicago) runs at 13:00 in Longgang, so MARD already holds the
+      morning's 311 staging and 261 consumption of 2026-09-21 (generator 0.8). Stock at 2100 is not
+      available stock of the hub.
+    reference_sql: |
+      SELECT ROUND(SUM(quantity), 3) AS staged_quantity, COUNT(DISTINCT matnr) AS materials_with_stock
+      FROM raw_ext.inventory_snapshot_daily
+      WHERE snapshot_date = DATE '2026-09-20' AND werks = 'CN10' AND lgort = '2100' AND quantity > 0
+    answer:
+      values:
+        - {column: staged_quantity, abs: 0.5}
+        - {column: materials_with_stock, abs: 0}
+
+  - id: c177
+    question: How many component units did the Longgang assembly consume in fiscal period 11 of FY2026?
+    role: ops_analyst_global
+    category: trap
+    expected_behavior: answer
+    trap_tags: [transfers_not_demand, transfer_double_count, fiscal_calendar]
+    required_kb_docs: [concepts/production_supply.md, concepts/goods_movements.md, concepts/fiscal_calendar.md]
+    required_tables: [raw_sap_ecc.mseg]
+    notes: >-
+      Consumption is movement type 261 at CN10 (storage location 2100). The 311 staging transfers from the
+      hub to 2100 move the same units and must not be added; every unit staged in the period was also
+      consumed in it, so adding both doubles the answer.
+    reference_sql: |
+      SELECT ROUND(SUM(menge), 3) AS consumed_quantity
+      FROM raw_sap_ecc.mseg
+      WHERE werks = 'CN10' AND bwart = '261' AND budat_mkpf BETWEEN '20260824' AND '20260920'
+    answer:
+      values: [{column: consumed_quantity, abs: 0.5}]
+
+  - id: c178
+    split: test
+    question: >-
+      How many production orders at Round Rock are overdue, meaning components were due before today and
+      have not been fully withdrawn?
+    role: site_manager_rr
+    category: trap
+    expected_behavior: answer
+    trap_tags: [no_data, data_freshness]
+    required_kb_docs: [concepts/production_supply.md]
+    required_tables: [raw_sap_ecc.resb]
+    notes: >-
+      The manufacturing backlog is empty at this extraction: no open production reservation (BDART = SB,
+      XLOEK blank) at US10 has a requirement date before 2026-09-21 with ENMNG below BDMNG. The answer is
+      zero, not "no data".
+    reference_sql: |
+      SELECT COUNT(DISTINCT aufnr) AS overdue_orders
+      FROM raw_sap_ecc.resb
+      WHERE werks = 'US10' AND bdart = 'SB' AND xloek = '' AND bdter < '20260921' AND enmng < bdmng
+    answer:
+      values: [{column: overdue_orders, abs: 0}]
+
+  - id: c179
+    question: >-
+      Which component has the largest planned-order requirement at Round Rock over the next four weeks, how
+      much is required, and how much of it is on hand at the main warehouse?
+    role: ops_analyst_global
+    category: multi_step
+    expected_behavior: answer
+    acceptable_behaviors: [answer, answer_with_assumption]
+    trap_tags: [stock_types, material_numbers]
+    required_kb_docs: [concepts/production_supply.md, metrics/available_stock.md, concepts/material_numbers.md]
+    required_tables: [raw_sap_ecc.resb, raw_sap_ecc.mard]
+    notes: >-
+      Planned-order requirements are the AR reservations of PLAF planned orders (BDTER from 2026-09-21 to
+      2026-10-18); hub stock is MARD.LABST at US10/1000. Material numbers are reported without leading zeros.
+    reference_sql: |
+      WITH requirement AS (
+        SELECT matnr, SUM(bdmng) AS planned_requirement
+        FROM raw_sap_ecc.resb
+        WHERE werks = 'US10' AND bdart = 'AR' AND xloek = '' AND bdter BETWEEN '20260921' AND '20261018'
+        GROUP BY matnr
+        ORDER BY planned_requirement DESC, matnr
+        LIMIT 1
+      )
+      SELECT ltrim('0', r.matnr) AS material, ROUND(r.planned_requirement, 3) AS planned_requirement,
+             ROUND(COALESCE(d.labst, 0), 3) AS on_hand_hub
+      FROM requirement r
+      LEFT JOIN raw_sap_ecc.mard d ON d.matnr = r.matnr AND d.werks = 'US10' AND d.lgort = '1000'
+    answer:
+      keys: [material]
+      values:
+        - {column: planned_requirement, abs: 0.5}
+        - {column: on_hand_hub, abs: 0.5}
+
+  # ---------------------------------------------------------------- replenishment engine: cases and projection
+  - id: c180
+    question: How many replenishment cases did the latest engine run open, per site and condition?
+    role: ops_analyst_global
+    category: covered
+    expected_behavior: answer
+    trap_tags: [metric_definition]
+    required_kb_docs: [metrics/projected_stock.md, guides/replenishment_planning.md]
+    required_tables: [curated.replenishment_case]
+    notes: >-
+      mv_replenishment_case (or curated.replenishment_case) filtered to the latest as_of_date; conditions are
+      shortage, warning, and excess.
+    reference_sql: |
+      SELECT site, condition, COUNT(*) AS cases
+      FROM curated.replenishment_case
+      WHERE as_of_date = (SELECT MAX(as_of_date) FROM curated.replenishment_case)
+      GROUP BY site, condition
+    answer:
+      keys: [site, condition]
+      values: [{column: cases, abs: 0}]
+
+  - id: c182
+    question: What is the total value at risk, in USD, of the open shortage cases at Round Rock?
+    role: ops_analyst_global
+    category: restricted
+    expected_behavior: policy_restricted
+    acceptable_behaviors: [policy_restricted, decline]
+    trap_tags: [role_access]
+    required_kb_docs: [metrics/projected_stock.md, guides/replenishment_planning.md]
+    required_tables: []
+    notes: >-
+      value_usd is a commercial column, masked (NULL) for every role without cost access; the ops analyst
+      must say the values are outside the role rather than report a sum of NULLs as zero or estimate them
+      from quantities and prices.
+
+  - id: c183
+    split: test
+    question: How many shortage cases does Longgang have in the latest engine run?
+    role: site_manager_rr
+    category: restricted
+    expected_behavior: policy_restricted
+    trap_tags: [site_isolation, role_access]
+    required_kb_docs: [policies/site_isolation.md]
+    required_tables: []
+    notes: >-
+      The Round Rock site manager sees only plant US10 rows of the planning tables and views; Longgang's
+      cases are filtered out, so a query returns nothing. Reporting zero cases is wrong.
+
+  - id: c184
+    question: >-
+      How many of the open replenishment cases are eligible for the supplier intake agent, and which
+      suppliers do they involve?
+    role: ops_analyst_global
+    category: adhoc
+    expected_behavior: answer
+    acceptable_behaviors: [answer, answer_with_assumption]
+    trap_tags: [metric_definition]
+    required_kb_docs: [metrics/projected_stock.md, guides/replenishment_planning.md]
+    required_tables: [curated.replenishment_case]
+    notes: >-
+      Cases with triage_class agent_eligible in the latest run: the total, and the suppliers named (counts per
+      supplier or per site are welcome but not required). The names in must_mention are bound to the snapshot
+      and the engine run: `refresh` does not recompute them, so check them against the vendors of these cases
+      after every refresh (generator 0.8 with engine 1.0: Corvid Gas Systems, Songshan Metal Parts, Kestrel
+      Vacuum Components, Blue Fen Electronics).
+    reference_sql: |
+      SELECT COUNT(*) AS agent_eligible_cases, COUNT(DISTINCT vendor) AS suppliers
+      FROM curated.replenishment_case
+      WHERE as_of_date = (SELECT MAX(as_of_date) FROM curated.replenishment_case)
+        AND triage_class = 'agent_eligible'
+    answer:
+      values: [{column: agent_eligible_cases, abs: 0}]
+      must_mention: [[Corvid], [Songshan], [Kestrel], [Blue Fen]]
+
+  - id: c185
+    split: test
+    question: >-
+      Of the open shortage cases at Round Rock, how many can be covered in time by the recommended lever, and
+      how many cannot?
+    role: ops_analyst_global
+    category: covered
+    expected_behavior: answer
+    trap_tags: [metric_definition]
+    required_kb_docs: [metrics/projected_stock.md]
+    required_tables: [curated.replenishment_case]
+    notes: covers_in_time of the shortage cases of plant US10 in the latest run.
+    reference_sql: |
+      SELECT COUNT_IF(covers_in_time) AS covered_in_time, COUNT_IF(NOT covers_in_time) AS not_in_time
+      FROM curated.replenishment_case
+      WHERE as_of_date = (SELECT MAX(as_of_date) FROM curated.replenishment_case)
+        AND plant = 'US10' AND condition = 'shortage'
+    answer:
+      values:
+        - {column: covered_in_time, abs: 0}
+        - {column: not_in_time, abs: 0}
+
+  - id: c186
+    split: test
+    question: >-
+      What is the projected stock of material 40001720 at Round Rock at the end of 2026-10-05, and on which
+      day does its projection first go negative?
+    role: ops_analyst_global
+    category: trap
+    expected_behavior: answer
+    trap_tags: [metric_definition, material_numbers]
+    required_kb_docs: [metrics/projected_stock.md]
+    required_tables: [curated.supply_position]
+    notes: >-
+      One material on one day of the latest projection: projected_qty of that row, not a sum over days (the
+      metric view adds up the rows selected). The first negative day is 2026-09-22.
+    reference_sql: |
+      SELECT ROUND(SUM(CASE WHEN day = DATE '2026-10-05' THEN projected_qty END), 3) AS projected_qty_2026_10_05,
+             CAST(MIN(CASE WHEN projected_qty < 0 THEN day END) AS STRING) AS first_short_day
+      FROM curated.supply_position
+      WHERE as_of_date = (SELECT MAX(as_of_date) FROM curated.supply_position)
+        AND plant = 'US10' AND material = '40001720'
+    answer:
+      values: [{column: projected_qty_2026_10_05, abs: 0.5}]
+      must_mention: [["2026-09-22", Sep 22, September 22, 22 September]]

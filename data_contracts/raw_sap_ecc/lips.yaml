@@ -1,0 +1,34 @@
+table: raw_sap_ecc.lips
+layer: raw
+source_system: SAP_ECC
+description: Delivery items (SAP table LIPS). LFIMG is in the sales unit VRKME; LGMNG is in the base unit MEINS.
+grain: One row per client, delivery, and item.
+primary_key: [mandt, vbeln, posnr]
+domain: Outbound
+subdomain: Outbound/Shipping
+sensitivity: internal
+site_key: {column: werks, kind: plant}
+columns:
+  - {name: mandt, type: STRING, nullable: false, sap_type: CLNT3, comment: "SAP client."}
+  - {name: vbeln, type: STRING, nullable: false, sap_type: CHAR10, comment: "Delivery number."}
+  - {name: posnr, type: STRING, nullable: false, sap_type: NUMC6, comment: "Delivery item number."}
+  - {name: pstyv, type: STRING, nullable: false, sap_type: CHAR4, comment: "Delivery item category."}
+  - {name: matnr, type: STRING, nullable: false, sap_type: CHAR18, comment: "Material number."}
+  - {name: werks, type: STRING, nullable: false, sap_type: CHAR4, comment: "Plant."}
+  - {name: lgort, type: STRING, nullable: false, sap_type: CHAR4, comment: "Storage location."}
+  - {name: lfimg, type: "DECIMAL(13,3)", nullable: false, sap_type: QUAN13_3, comment: "Delivered quantity in sales unit VRKME."}
+  - {name: vrkme, type: STRING, nullable: false, sap_type: UNIT3, comment: "Sales unit."}
+  - {name: lgmng, type: "DECIMAL(13,3)", nullable: false, sap_type: QUAN13_3, comment: "Delivered quantity in base unit MEINS."}
+  - {name: meins, type: STRING, nullable: false, sap_type: UNIT3, comment: "Base unit of measure."}
+  - {name: umvkz, type: "DECIMAL(5,0)", nullable: false, sap_type: DEC5, comment: "Numerator: sales unit to base unit conversion."}
+  - {name: umvkn, type: "DECIMAL(5,0)", nullable: false, sap_type: DEC5, comment: "Denominator: sales unit to base unit conversion."}
+  - {name: vgbel, type: STRING, nullable: false, sap_type: CHAR12, comment: "Preceding document: the production order (AFKO AUFNR) whose component picking list (CO27) the delivery fulfils."}
+  - {name: vgpos, type: STRING, nullable: false, sap_type: NUMC6, comment: "Preceding document item: the component reservation line (RESB RSPOS) of the production order."}
+  - {name: podrel, type: STRING, nullable: false, sap_type: CHAR1, comment: "POD relevance: A = always relevant, blank = not relevant."}
+tests:
+  accepted_values:
+    - {column: podrel, values: ["", A]}
+  relationships:
+    - {columns: [mandt, vbeln], references: raw_sap_ecc.likp, ref_columns: [mandt, vbeln]}
+    - {columns: [mandt, vgbel], references: raw_sap_ecc.afko, ref_columns: [mandt, aufnr]}
+access: [ops_analyst_global, site_manager_rr, site_manager_cn, trade_compliance]

@@ -1,0 +1,25 @@
+table: raw_sap_ecc.vbuk
+layer: raw
+source_system: SAP_ECC
+description: Header status of deliveries (SAP table VBUK). Status values - blank = not relevant, A = not processed, B = partially processed, C = completely processed.
+grain: One row per client and delivery.
+primary_key: [mandt, vbeln]
+domain: Outbound
+subdomain: Outbound/Shipping
+sensitivity: internal
+columns:
+  - {name: mandt, type: STRING, nullable: false, sap_type: CLNT3, comment: "SAP client."}
+  - {name: vbeln, type: STRING, nullable: false, sap_type: CHAR10, comment: "Delivery number."}
+  - {name: gbstk, type: STRING, nullable: false, sap_type: CHAR1, comment: "Overall processing status."}
+  - {name: kostk, type: STRING, nullable: false, sap_type: CHAR1, comment: "Overall picking status."}
+  - {name: wbstk, type: STRING, nullable: false, sap_type: CHAR1, comment: "Overall goods movement (goods issue) status."}
+  - {name: pdstk, type: STRING, nullable: false, sap_type: CHAR1, comment: "Overall proof-of-delivery status; blank when POD is not relevant."}
+tests:
+  accepted_values:
+    - {column: gbstk, values: [A, B, C]}
+    - {column: kostk, values: [A, B, C]}
+    - {column: wbstk, values: [A, B, C]}
+    - {column: pdstk, values: ["", A, C]}
+  relationships:
+    - {columns: [mandt, vbeln], references: raw_sap_ecc.likp, ref_columns: [mandt, vbeln]}
+access: [ops_analyst_global, site_manager_rr, site_manager_cn, trade_compliance]

@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Data agent{% endblock %} · SouthNorth Solutions</title>
+<style>
+  :root { --ink: #1d2733; --muted: #5d6b7a; --line: #d9dee5; --bg: #f6f7f9; --card: #fff; --accent: #1f5f99;
+          --ok: #1e7b4a; --warn: #a55a00; --bad: #b3261e; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--ink); background: var(--bg); }
+  header { background: var(--ink); color: #fff; padding: 10px 20px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+  header a { color: #fff; text-decoration: none; } header .brand { font-weight: 600; }
+  header .spend { margin-left: auto; opacity: .9; }
+  .mode { background: #ffd666; color: #3a2a00; border-radius: 4px; padding: 1px 8px; font-size: 12px; }
+  main { max-width: 1000px; margin: 0 auto; padding: 16px 20px 40px; }
+  h1 { font-size: 20px; margin: 8px 0 12px; } h2 { font-size: 16px; margin: 0 0 10px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; margin: 0 0 14px; }
+  table { width: 100%; border-collapse: collapse; } th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; } td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .error { border-radius: 6px; padding: 8px 12px; margin: 0 0 12px; background: #fbeaea; color: var(--bad); }
+  .tag { display: inline-block; border-radius: 10px; padding: 0 8px; font-size: 12px; background: #e9eef4; }
+  .tag.yes { background: #e8f4ec; color: var(--ok); } .tag.no { background: #fbeaea; color: var(--bad); }
+  .tag.warn { background: #fdf3e1; color: var(--warn); }
+  label { display: block; color: var(--muted); font-size: 12px; margin: 6px 0 2px; }
+  input, select, textarea { font: inherit; padding: 5px 7px; border: 1px solid var(--line); border-radius: 4px; width: 100%; background: #fff; }
+  textarea { min-height: 70px; } .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0 12px; }
+  button { font: inherit; background: var(--accent); color: #fff; border: 0; border-radius: 4px; padding: 6px 14px; cursor: pointer; margin-top: 8px; }
+  button:disabled { opacity: .6; cursor: wait; } button.secondary { background: #e9eef4; color: var(--ink); }
+  .muted { color: var(--muted); } a { color: var(--accent); }
+  .question { font-weight: 600; white-space: pre-wrap; } .answer { line-height: 1.6; margin: 10px 0;
+    padding: 10px 14px; border-left: 3px solid var(--accent); background: #fafbfc; }
+  .meta { display: flex; gap: 6px 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin: 6px 0; }
+  .answer p { margin: 0 0 8px; } .answer ul { margin: 0 0 8px; padding-left: 20px; } .answer table { width: auto; margin: 0 0 8px; }
+  code { background: #eef1f5; padding: 0 3px; border-radius: 3px; font-size: 12px; }
+  details summary { cursor: pointer; color: var(--accent); } details { margin-top: 8px; }
+  pre { background: #f2f4f7; padding: 8px 10px; border-radius: 4px; overflow-x: auto; white-space: pre-wrap; font-size: 12px; }
+  .running { display: none; color: var(--warn); margin-left: 10px; } form.busy .running { display: inline; }
+</style>
+</head>
+<body>
+<header>
+  <a class="brand" href="/">SouthNorth Solutions · data agent</a>
+  <span class="mode">local</span>
+  <span class="spend">spent today USD {{ "%.2f" | format(spent_today) }} of {{ "%.2f" | format(max_usd_per_day) }}</span>
+</header>
+<main>
+  {% if error %}<div class="error">{{ error }}</div>{% endif %}
+  {% block content %}{% endblock %}
+</main>
+<script>
+  // One submit per question: the agent takes a while, and a second click would pay again.
+  document.querySelectorAll("form.ask").forEach((form) => form.addEventListener("submit", () => {
+    form.classList.add("busy");
+    form.querySelectorAll("button").forEach((button) => { button.disabled = true; });
+  }));
+</script>
+</body>
+</html>

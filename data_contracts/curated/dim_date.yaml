@@ -1,0 +1,19 @@
+table: curated.dim_date
+layer: curated
+materialization: view
+depends_on: [raw_sap_ecc.t009b]
+description: Fiscal calendar by day (fiscal year variant Z5 from T009B) from the start of FY2025 to the last period end in T009B. Fiscal years end on the last Sunday of October; periods follow a 4-4-5 week pattern; weeks start on Monday.
+grain: One row per calendar day.
+primary_key: [calendar_date]
+domain: MasterData
+subdomain: MasterData/Calendar
+sensitivity: internal
+columns:
+  - {name: calendar_date, type: DATE, nullable: false, comment: "Calendar day."}
+  - {name: fiscal_year, type: INT, nullable: false, comment: "Fiscal year, e.g. 2026 for 2025-10-27 to 2026-10-25."}
+  - {name: fiscal_quarter, type: INT, nullable: false, comment: "Fiscal quarter 1-4 (periods 1-3, 4-6, 7-9, 10-12)."}
+  - {name: fiscal_period, type: INT, nullable: false, comment: "Fiscal period 1-12."}
+  - {name: fiscal_week, type: INT, nullable: false, comment: "Week of the fiscal year, 1-53; weeks start on Monday."}
+  - {name: fiscal_period_start, type: DATE, nullable: false, comment: "First day of the fiscal period."}
+  - {name: fiscal_period_end, type: DATE, nullable: false, comment: "Last day of the fiscal period."}
+access: []

@@ -1,0 +1,21 @@
+table: raw_sap_ecc.eket
+layer: raw
+source_system: SAP_ECC
+description: Purchase order schedule lines (SAP table EKET) with the agreed delivery date and the quantity received so far.
+grain: One row per client, purchase order, item, and schedule line.
+primary_key: [mandt, ebeln, ebelp, etenr]
+domain: Procurement
+subdomain: Procurement/Purchase orders
+sensitivity: internal
+columns:
+  - {name: mandt, type: STRING, nullable: false, sap_type: CLNT3, comment: "SAP client."}
+  - {name: ebeln, type: STRING, nullable: false, sap_type: CHAR10, comment: "Purchase order number."}
+  - {name: ebelp, type: STRING, nullable: false, sap_type: NUMC5, comment: "Purchase order item."}
+  - {name: etenr, type: STRING, nullable: false, sap_type: NUMC4, comment: "Schedule line."}
+  - {name: eindt, type: STRING, nullable: false, sap_type: DATS, comment: "Agreed delivery date (receiving site local date)."}
+  - {name: menge, type: "DECIMAL(13,3)", nullable: false, sap_type: QUAN13_3, comment: "Scheduled quantity."}
+  - {name: wemng, type: "DECIMAL(13,3)", nullable: false, sap_type: QUAN13_3, comment: "Quantity received so far (goods receipts up to the extraction)."}
+tests:
+  relationships:
+    - {columns: [mandt, ebeln, ebelp], references: raw_sap_ecc.ekpo, ref_columns: [mandt, ebeln, ebelp]}
+access: [ops_analyst_global, site_manager_rr, site_manager_cn]

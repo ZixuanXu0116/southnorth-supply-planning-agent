@@ -1,0 +1,21 @@
+table: raw_sap_ewm.scdl_db_proci_o
+layer: raw
+source_system: SAP_EWM
+description: Outbound delivery order items in EWM (table /SCDL/DB_PROCI_O, simplified). Product numbers are 40-character, zero-padded.
+grain: One row per client, document, and item.
+primary_key: [mandt, docid, itemid]
+domain: Outbound
+subdomain: Outbound/Shipping
+sensitivity: internal
+columns:
+  - {name: mandt, type: STRING, nullable: false, sap_type: CLNT3, comment: "SAP client."}
+  - {name: docid, type: STRING, nullable: false, sap_type: RAW16, comment: "Document GUID."}
+  - {name: itemid, type: STRING, nullable: false, sap_type: RAW16, comment: "Item GUID."}
+  - {name: itemno, type: STRING, nullable: false, sap_type: CHAR10, comment: "Item number."}
+  - {name: productno, type: STRING, nullable: false, sap_type: CHAR40, comment: "Product number (40 characters, zero-padded)."}
+  - {name: qty, type: "DECIMAL(31,14)", nullable: false, sap_type: QUAN31_14, comment: "Quantity in base unit UOM."}
+  - {name: uom, type: STRING, nullable: false, sap_type: UNIT3, comment: "Unit of measure."}
+tests:
+  relationships:
+    - {columns: [mandt, docid], references: raw_sap_ewm.scdl_db_proch_o, ref_columns: [mandt, docid]}
+access: [ops_analyst_global, site_manager_rr, site_manager_cn]

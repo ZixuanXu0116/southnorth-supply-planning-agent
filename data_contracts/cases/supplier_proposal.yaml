@@ -1,0 +1,38 @@
+table: cases.supplier_proposal
+layer: cases
+source_system: case server
+description: Structured supplier proposals collected on a case (one row per option), in the channel-independent proposal schema. Recorded by the intake agent, by purchasing, or by the supplier on the portal; the free-text conditions are shown verbatim and never executed.
+grain: One row per proposed option.
+primary_key: [proposal_id]
+domain: Procurement
+subdomain: Procurement/Cases
+sensitivity: internal
+site_scope: all
+site_key: {column: plant, kind: plant}
+columns:
+  - {name: proposal_id, type: STRING, nullable: false, comment: "Proposal identifier: P-<option>-<case seq>-<case id>."}
+  - {name: case_id, type: STRING, nullable: false, comment: "Case the proposal belongs to."}
+  - {name: plant, type: STRING, nullable: false, comment: "Plant of the case."}
+  - {name: vendor, type: STRING, nullable: false, comment: "Vendor account number (LFA1 LIFNR)."}
+  - {name: option_id, type: INT, nullable: false, comment: "Option number within the supplier's answer."}
+  - {name: kind, type: STRING, nullable: false, comment: "expedite, new_order, partial, alternative_part, or decline."}
+  - {name: quantity, type: DOUBLE, nullable: true, comment: "Offered quantity in the base unit."}
+  - {name: ship_date, type: DATE, nullable: true, comment: "Promised ship date."}
+  - {name: arrival_date, type: DATE, nullable: true, comment: "Promised or derived arrival date at the plant."}
+  - {name: unit_price, type: "DECIMAL(15,2)", nullable: true, sensitivity: commercial, comment: "Offered unit price in the order currency."}
+  - {name: surcharge_pct, type: "DECIMAL(15,2)", nullable: true, sensitivity: commercial, comment: "Expedite surcharge in percent of the line value."}
+  - {name: surcharge_amount, type: "DECIMAL(15,2)", nullable: true, sensitivity: commercial, comment: "Expedite surcharge as an amount, when quoted as such."}
+  - {name: freight_amount, type: "DECIMAL(15,2)", nullable: true, sensitivity: commercial, comment: "Expedited freight for the shipment."}
+  - {name: valid_until, type: DATE, nullable: true, comment: "Last day the offer is valid."}
+  - {name: split_deliveries, type: STRING, nullable: true, comment: "JSON list of partial deliveries (quantity, arrival_date)."}
+  - {name: conditions, type: STRING, nullable: true, sensitivity: commercial, comment: "Supplier conditions as free text (500 characters at most); untrusted, never executed."}
+  - {name: source_message_id, type: STRING, nullable: true, comment: "Message the proposal was taken from."}
+  - {name: recorded_by, type: STRING, nullable: false, comment: "Who recorded the option: intake_agent, human (purchasing), or supplier (entered or uploaded by the supplier on the portal)."}
+  - {name: created_at, type: TIMESTAMP, nullable: false, comment: "When the proposal was recorded (UTC)."}
+  - {name: within_mandate, type: STRING, nullable: true, comment: "JSON flags per mandate field (arrival, quantity, surcharge, freight, validity, kind) and all, comparing the option with the mandate in force (decision record 004); NULL when the case had no mandate."}
+tests:
+  unique: [[proposal_id]]
+  accepted_values:
+    - {column: kind, values: [expedite, new_order, partial, alternative_part, decline]}
+    - {column: recorded_by, values: [intake_agent, human, supplier]}
+access: [ops_analyst_global, site_manager_rr, site_manager_cn, purchasing, case_writer]

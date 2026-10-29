@@ -1,0 +1,33 @@
+table: curated.supply_position
+layer: curated
+materialization: table
+description: Daily supply projection per material and plant over the planning horizon, computed nightly by the replenishment engine from stock on hand, stock in transit, open purchase orders (expected receipt = agreed date plus the vendor's median lateness), backlog, firm demand (open deliveries and sales-order lines), and a forecast from the trailing 28-day demand rate. Every element is a quantity in base units; projected stock is on hand plus cumulative supply minus backlog and cumulative demand.
+grain: One row per as-of date, material, plant, and day of the horizon (day 0 is the as-of date).
+primary_key: [as_of_date, material, plant, day]
+domain: Procurement
+subdomain: Procurement/Planning
+sensitivity: internal
+site_key: {column: plant, kind: plant}
+columns:
+  - {name: as_of_date, type: DATE, nullable: false, comment: "Day the projection was computed for (ECC extraction date)."}
+  - {name: day, type: DATE, nullable: false, comment: "Projected day (site-local calendar date)."}
+  - {name: day_offset, type: INT, nullable: false, comment: "Days after the as-of date (0 to the horizon)."}
+  - {name: material, type: STRING, nullable: false, comment: "Material number without leading zeros."}
+  - {name: plant, type: STRING, nullable: false, comment: "Plant in the planning scope: US10 (Round Rock main warehouse 1000 with overflow hub 2001)."}
+  - {name: site, type: STRING, nullable: false, comment: "Hub site of the plant: Round Rock or Longgang."}
+  - {name: on_hand_qty, type: DOUBLE, nullable: false, comment: "Available stock at the main warehouse on the as-of date (same on every day of the projection)."}
+  - {name: overflow_on_hand_qty, type: DOUBLE, nullable: false, comment: "Available stock at the plant's overflow hub on the as-of date (same on every day); counted in projected_qty, not in projected_main_qty."}
+  - {name: backlog_qty, type: DOUBLE, nullable: false, comment: "Firm demand whose requirement date is on or before the as-of date (counted on day 0)."}
+  - {name: in_transit_qty, type: DOUBLE, nullable: false, comment: "Stock in transfer arriving on this day."}
+  - {name: receipt_qty, type: DOUBLE, nullable: false, comment: "Open purchase order quantity expected on this day."}
+  - {name: firm_demand_qty, type: DOUBLE, nullable: false, comment: "Firm demand due on this day: open deliveries, sales-order lines, and open component reservations of released production orders."}
+  - {name: production_demand_qty, type: DOUBLE, nullable: false, comment: "The part of the firm demand that is open production order reservations (RESB type SB) due on this day."}
+  - {name: forecast_qty, type: DOUBLE, nullable: false, comment: "Forecast demand on this day: the weekly trailing-rate forecast (replenishment_case.daily_demand_rate) net of the explicit requirements of the same week, plus planned-order requirements."}
+  - {name: planned_order_qty, type: DOUBLE, nullable: false, comment: "The part of the forecast that is dependent requirements of planned orders (RESB type AR) due on this day."}
+  - {name: projected_qty, type: DOUBLE, nullable: false, comment: "Projected pooled stock of the main warehouse and its overflow hub at the end of this day: on hand at both plus cumulative in-transit and receipts, minus backlog and cumulative demand."}
+  - {name: projected_main_qty, type: DOUBLE, nullable: false, comment: "Projected stock of the main warehouse alone at the end of this day (the overflow hub's stock not counted): below the minimum means a pull from the overflow hub; above the maximum for eight weeks means a move to it."}
+  - {name: safety_stock_qty, type: DOUBLE, nullable: false, comment: "Safety stock (MARC EISBE)."}
+  - {name: max_stock_qty, type: DOUBLE, nullable: false, comment: "Maximum stock level (MARC MABST)."}
+  - {name: engine_version, type: STRING, nullable: false, comment: "Version of the replenishment engine."}
+  - {name: params_digest, type: STRING, nullable: false, comment: "Digest of the engine parameters used."}
+access: [ops_analyst_global, site_manager_rr, site_manager_cn, purchasing]

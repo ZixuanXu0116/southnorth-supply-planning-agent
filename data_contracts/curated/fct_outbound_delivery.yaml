@@ -1,0 +1,56 @@
+table: curated.fct_outbound_delivery
+layer: curated
+materialization: view
+depends_on:
+  - raw_sap_ecc.likp
+  - raw_sap_ecc.lips
+  - raw_sap_ecc.vbup
+  - raw_sap_ecc.vbuk
+  - raw_sap_ecc.mkpf
+  - raw_sap_ecc.mseg
+  - raw_sap_ewm.scdl_db_refdoc
+  - raw_sap_ewm.scwm_ordim_c
+  - raw_sap_ewm.scwm_wavehdr
+  - curated.dim_date
+description: Outbound deliveries (the picking lists of production orders delivered to the production supply area of the manufacturing department) with site, receiving work center, planned and actual goods issue dates (shipping-point local dates) and their fiscal periods, on-time goods issue status, item counts, receipt confirmation by the work center (proof of delivery), and the wave-to-goods-issue lead time. An item is shipped when its goods movement status is complete (VBUP.WBSTA = 'C'), so reversed and re-posted goods issues are counted once.
+grain: One row per outbound delivery (LIKP, delivery type ZPSA).
+primary_key: [delivery_id]
+domain: Outbound
+subdomain: Outbound/Deliveries
+sensitivity: internal
+columns:
+  - {name: delivery_id, type: STRING, nullable: false, comment: "Delivery number (LIKP.VBELN)."}
+  - {name: site, type: STRING, nullable: false, comment: "Shipping site: Round Rock, Longgang, or Dongguan."}
+  - {name: shipping_point, type: STRING, nullable: false, comment: "Shipping point: U100 Round Rock, C100 Longgang, C300 Dongguan."}
+  - {name: warehouse, type: STRING, nullable: false, comment: "EWM warehouse that executes the delivery: RR01, SZ01, or DG01."}
+  - {name: plant, type: STRING, nullable: false, comment: "Plant: US10 (Round Rock) or CN10 (Longgang and Dongguan)."}
+  - {name: work_center, type: STRING, nullable: false, comment: "Receiving work center of the manufacturing department (LIKP.KUNNR; KNA1 account group ZINT). There are no external customers."}
+  - {name: planned_gi_date, type: DATE, nullable: false, comment: "Planned goods issue date (LIKP.WADAT), shipping-point local date."}
+  - {name: actual_gi_date, type: DATE, comment: "Actual goods issue date (LIKP.WADAT_IST), shipping-point local date; NULL if not posted."}
+  - {name: is_gi_posted, type: BOOLEAN, nullable: false, comment: "Goods issue posted (VBUK.WBSTK = 'C')."}
+  - {name: is_on_time, type: BOOLEAN, nullable: false, comment: "Goods issue posted on or before the planned goods issue date; open deliveries are not on time."}
+  - {name: is_due_before_cutoff, type: BOOLEAN, nullable: false, comment: "Planned goods issue date before the ECC data cut-off day (deliveries due later are not yet measurable)."}
+  - {name: ecc_cutoff_date, type: DATE, nullable: false, comment: "ECC data cut-off day: the day after the last ECC entry (nightly extraction at 00:00 America/Chicago)."}
+  - {name: delivery_lines, type: BIGINT, nullable: false, comment: "Number of delivery items."}
+  - {name: shipped_lines, type: BIGINT, nullable: false, comment: "Number of delivery items with goods movement status complete (shipped)."}
+  - {name: planned_delivery_date, type: DATE, nullable: false, comment: "Planned delivery date at the production supply area (LIKP.LFDAT)."}
+  - {name: is_pod_relevant, type: BOOLEAN, nullable: false, comment: "The delivery requires a receipt confirmation by the work center, the proof of delivery (VBUK.PDSTK set)."}
+  - {name: pod_date, type: DATE, comment: "Proof of delivery date (LIKP.PODAT, shipping-point time zone); NULL if not confirmed or not POD-relevant."}
+  - {name: is_pod_confirmed, type: BOOLEAN, nullable: false, comment: "Proof of delivery confirmed."}
+  - {name: is_delivered_on_time, type: BOOLEAN, nullable: false, comment: "Proof of delivery on or before the planned delivery date; unconfirmed deliveries are not on time."}
+  - {name: wave_released_at, type: TIMESTAMP, comment: "Release of the delivery's picking wave in EWM (UTC); NULL if the delivery was never picked."}
+  - {name: final_gi_at, type: TIMESTAMP, comment: "Latest goods issue posting (movement 311 to the production supply area) in ECC, converted from America/Chicago to UTC."}
+  - {name: wave_to_pgi_minutes, type: DOUBLE, comment: "Minutes from wave release to the final goods issue posting, for shipped deliveries."}
+  - {name: planned_fiscal_year, type: INT, comment: "Fiscal year of the planned goods issue date."}
+  - {name: planned_fiscal_quarter, type: INT, comment: "Fiscal quarter of the planned goods issue date."}
+  - {name: planned_fiscal_period, type: INT, comment: "Fiscal period of the planned goods issue date."}
+  - {name: planned_fiscal_week, type: INT, comment: "Fiscal week of the planned goods issue date."}
+  - {name: gi_fiscal_year, type: INT, comment: "Fiscal year of the actual goods issue date."}
+  - {name: gi_fiscal_quarter, type: INT, comment: "Fiscal quarter of the actual goods issue date."}
+  - {name: gi_fiscal_period, type: INT, comment: "Fiscal period of the actual goods issue date."}
+  - {name: gi_fiscal_week, type: INT, comment: "Fiscal week of the actual goods issue date."}
+  - {name: delivery_fiscal_year, type: INT, comment: "Fiscal year of the planned delivery date."}
+  - {name: delivery_fiscal_quarter, type: INT, comment: "Fiscal quarter of the planned delivery date."}
+  - {name: delivery_fiscal_period, type: INT, comment: "Fiscal period of the planned delivery date."}
+  - {name: delivery_fiscal_week, type: INT, comment: "Fiscal week of the planned delivery date."}
+access: []

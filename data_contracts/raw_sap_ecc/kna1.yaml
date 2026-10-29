@@ -1,0 +1,20 @@
+table: raw_sap_ecc.kna1
+layer: raw
+source_system: SAP_ECC
+description: Customer master general data (SAP table KNA1). Customers are fictional fabs and service depots.
+grain: One row per client and customer.
+primary_key: [mandt, kunnr]
+domain: MasterData
+subdomain: MasterData/Customer
+sensitivity: internal
+columns:
+  - {name: mandt, type: STRING, nullable: false, sap_type: CLNT3, comment: "SAP client."}
+  - {name: kunnr, type: STRING, nullable: false, sap_type: CHAR10, comment: "Customer number, zero-padded to 10 characters."}
+  - {name: name1, type: STRING, nullable: false, sap_type: CHAR35, comment: "Customer name."}
+  - {name: ort01, type: STRING, nullable: false, sap_type: CHAR35, comment: "City."}
+  - {name: land1, type: STRING, nullable: false, sap_type: CHAR3, comment: "Country key (ISO alpha-2); drives export-control destination groups."}
+  - {name: ktokd, type: STRING, nullable: false, sap_type: CHAR4, comment: "Account group: ZINT = internal partner (a work center of the manufacturing department). The partners are internal: there are no external customers."}
+tests:
+  accepted_values:
+    - {column: ktokd, values: [ZINT]}
+access: [ops_analyst_global, site_manager_rr, site_manager_cn, trade_compliance]

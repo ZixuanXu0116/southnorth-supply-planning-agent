@@ -1,0 +1,23 @@
+table: raw_sap_ecc.mbew
+layer: raw
+source_system: SAP_ECC
+description: Material valuation (SAP table MBEW). Prices are in the currency of the valuation area's company code (US10 in USD, CN10 in CNY).
+grain: One row per client, material, and valuation area.
+primary_key: [mandt, matnr, bwkey]
+domain: MasterData
+subdomain: MasterData/Material
+sensitivity: internal
+site_key: {column: bwkey, kind: plant}
+columns:
+  - {name: mandt, type: STRING, nullable: false, sap_type: CLNT3, comment: "SAP client."}
+  - {name: matnr, type: STRING, nullable: false, sap_type: CHAR18, comment: "Material number (18-character, zero-padded)."}
+  - {name: bwkey, type: STRING, nullable: false, sap_type: CHAR4, comment: "Valuation area (equals plant code)."}
+  - {name: vprsv, type: STRING, nullable: false, sap_type: CHAR1, comment: "Price control: S = standard price."}
+  - {name: stprs, type: "DECIMAL(11,2)", nullable: false, sap_type: CURR11_2, comment: "Standard price per PEINH base units, in company-code currency (USD for US10, CNY for CN10)."}
+  - {name: peinh, type: "DECIMAL(5,0)", nullable: false, sap_type: DEC5, comment: "Price unit."}
+tests:
+  accepted_values:
+    - {column: vprsv, values: [S]}
+  relationships:
+    - {columns: [mandt, matnr], references: raw_sap_ecc.mara, ref_columns: [mandt, matnr]}
+access: [ops_analyst_global, site_manager_rr, site_manager_cn]

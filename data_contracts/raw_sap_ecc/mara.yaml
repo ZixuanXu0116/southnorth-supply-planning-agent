@@ -1,0 +1,28 @@
+table: raw_sap_ecc.mara
+layer: raw
+source_system: SAP_ECC
+description: General material data (SAP table MARA). Material numbers are 18-character, zero-padded strings.
+grain: One row per client and material.
+primary_key: [mandt, matnr]
+domain: MasterData
+subdomain: MasterData/Material
+sensitivity: internal
+columns:
+  - {name: mandt, type: STRING, nullable: false, sap_type: CLNT3, comment: "SAP client."}
+  - {name: matnr, type: STRING, nullable: false, sap_type: CHAR18, comment: "Material number, zero-padded to 18 characters (e.g. 000000000040000123)."}
+  - {name: ersda, type: STRING, nullable: false, sap_type: DATS, comment: "Creation date as YYYYMMDD string."}
+  - {name: mtart, type: STRING, nullable: false, sap_type: CHAR4, comment: "Material type: ERSA spare part, FERT assembly/kit, HAWA trading good."}
+  - {name: matkl, type: STRING, nullable: false, sap_type: CHAR9, comment: "Material group (product family), e.g. SP-VAC vacuum, SP-RFP RF power."}
+  - {name: meins, type: STRING, nullable: false, sap_type: UNIT3, comment: "Base unit of measure."}
+  - {name: brgew, type: "DECIMAL(13,3)", nullable: false, sap_type: QUAN13_3, comment: "Gross weight per base unit, in unit GEWEI."}
+  - {name: ntgew, type: "DECIMAL(13,3)", nullable: false, sap_type: QUAN13_3, comment: "Net weight per base unit, in unit GEWEI."}
+  - {name: gewei, type: STRING, nullable: false, sap_type: UNIT3, comment: "Weight unit."}
+  - {name: volum, type: "DECIMAL(13,3)", nullable: false, sap_type: QUAN13_3, comment: "Volume per base unit, in unit VOLEH."}
+  - {name: voleh, type: STRING, nullable: false, sap_type: UNIT3, comment: "Volume unit (CD3 = cubic decimeter)."}
+  - {name: lvorm, type: STRING, nullable: false, sap_type: CHAR1, comment: "Deletion flag at client level ('X' = flagged for deletion)."}
+tests:
+  accepted_values:
+    - {column: mtart, values: [ERSA, FERT, HAWA]}
+    - {column: matkl, values: [SP-VAC, SP-RFP, SP-WHD, SP-GAS, SP-CHK, SP-SEN, SP-CON, SP-ELE, SP-SEL, SP-FST]}
+    - {column: lvorm, values: ["", "X"]}
+access: [ops_analyst_global, site_manager_rr, site_manager_cn, trade_compliance]

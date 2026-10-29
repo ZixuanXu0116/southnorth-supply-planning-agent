@@ -1,0 +1,55 @@
+# Unity Catalog metric view. `definition` is deployed as YAML 1.1 to <catalog>.semantic.<name>
+# (`snm-data build`); the other keys are project metadata: the roles that may query it and the
+# knowledge-base documents whose definitions it implements.
+name: mv_autostore_availability
+access: [ops_analyst_global, site_manager_cn]
+kb: [metrics/autostore_availability.md]
+definition:
+  version: 1.1
+  comment: >-
+    Availability of the Longgang AutoStore by day (Longgang local time): the whole system (subject SYSTEM, running
+    time) and each port (subject AS-PORT-01 to AS-PORT-12, open time). Availability over a range of days is the
+    available minutes over the minutes in those days (Longgang works 24 hours, 7 days). Filter subject = 'SYSTEM'
+    for the system, or subject_type = 'port' and group by subject for the ports.
+  source: "{catalog}.curated.fct_autostore_status_daily"
+  dimensions:
+    - name: subject
+      expr: subject
+      comment: "SYSTEM or a port identifier (AS-PORT-01 to AS-PORT-12)."
+    - name: subject_type
+      expr: subject_type
+      comment: "system or port."
+    - name: calendar_date
+      expr: calendar_date
+      comment: "Day in Longgang local time; filter with a range for calendar periods."
+    - name: fiscal_year
+      expr: fiscal_year
+      comment: "Fiscal year of the day."
+    - name: fiscal_quarter
+      expr: fiscal_quarter
+      comment: "Fiscal quarter (1-4) of the day."
+    - name: fiscal_period
+      expr: fiscal_period
+      comment: "Fiscal period (1-12) of the day."
+    - name: fiscal_week
+      expr: fiscal_week
+      comment: "Fiscal week (1-53, Monday to Sunday) of the day."
+  measures:
+    - name: availability
+      expr: try_divide(SUM(available_minutes), SUM(minutes_in_day))
+      comment: "Share of calendar time the system was running or the port was open, a fraction between 0 and 1."
+    - name: downtime_hours
+      expr: SUM(downtime_minutes) / 60.0
+      comment: "Hours the system was stopped or the port was closed."
+    - name: maintenance_hours
+      expr: SUM(maintenance_minutes) / 60.0
+      comment: "Port closure hours for planned maintenance (ports only)."
+    - name: fault_hours
+      expr: SUM(fault_minutes) / 60.0
+      comment: "Port closure hours for faults (ports only)."
+    - name: downtime_events
+      expr: SUM(downtime_events)
+      comment: "Stops or closures overlapping the days (an event spanning days counts once per day)."
+    - name: days
+      expr: COUNT(1)
+      comment: "Days covered."

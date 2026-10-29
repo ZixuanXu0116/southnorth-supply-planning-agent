@@ -1,0 +1,21 @@
+table: raw_ext.autostore_system_status
+layer: raw
+source_system: AUTOSTORE
+description: Stops of the whole AutoStore system at Longgang (no robot moves, no port can work). Only STOPPED intervals are logged; any other time the system is running. Timestamps are Longgang local time (Asia/Shanghai) without an offset.
+grain: One row per system stop.
+primary_key: [event_id]
+domain: Automation
+subdomain: Automation/AutoStore
+sensitivity: internal
+site_scope: CN10
+columns:
+  - {name: event_id, type: STRING, nullable: false, comment: "Event number (controller sequence)."}
+  - {name: status, type: STRING, nullable: false, comment: "STOPPED."}
+  - {name: started_at, type: TIMESTAMP_NTZ, nullable: false, comment: "Stop start (Longgang local time)."}
+  - {name: ended_at, type: TIMESTAMP_NTZ, nullable: false, comment: "Restart (Longgang local time)."}
+  - {name: reason, type: STRING, nullable: false, comment: "ROBOT_FAULT, GRID_OBSTRUCTION, SOFTWARE, or POWER."}
+tests:
+  accepted_values:
+    - {column: status, values: [STOPPED]}
+    - {column: reason, values: [ROBOT_FAULT, GRID_OBSTRUCTION, SOFTWARE, POWER]}
+access: [ops_analyst_global, site_manager_cn]

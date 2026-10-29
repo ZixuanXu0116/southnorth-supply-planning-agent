@@ -1,0 +1,18 @@
+table: raw_sap_ecc.makt
+layer: raw
+source_system: SAP_ECC
+description: Material descriptions (SAP table MAKT). Only English (SPRAS = E) is replicated.
+grain: One row per client, material, and language.
+primary_key: [mandt, matnr, spras]
+domain: MasterData
+subdomain: MasterData/Material
+sensitivity: internal
+columns:
+  - {name: mandt, type: STRING, nullable: false, sap_type: CLNT3, comment: "SAP client."}
+  - {name: matnr, type: STRING, nullable: false, sap_type: CHAR18, comment: "Material number (18-character, zero-padded)."}
+  - {name: spras, type: STRING, nullable: false, sap_type: LANG1, comment: "Language key (E = English)."}
+  - {name: maktx, type: STRING, nullable: false, sap_type: CHAR40, comment: "Material description."}
+tests:
+  relationships:
+    - {columns: [mandt, matnr], references: raw_sap_ecc.mara, ref_columns: [mandt, matnr]}
+access: [ops_analyst_global, site_manager_rr, site_manager_cn, trade_compliance]

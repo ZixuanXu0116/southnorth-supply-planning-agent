@@ -1,0 +1,33 @@
+table: raw_ext.purchasing_interaction
+layer: raw
+source_system: PURCHASING
+description: Purchasing team's recorded exchanges with vendors about purchase orders (expedite requests on late orders, emergency buys, confirmation inquiries) with rounds, days to resolution, days gained, surcharge paid, and the pseudonymized buyer. The human baseline of the planner evaluation.
+grain: One row per interaction (one per purchase order item).
+primary_key: [interaction_id]
+domain: Procurement
+subdomain: Procurement/Purchase orders
+sensitivity: internal
+site_key: {column: werks, kind: plant}
+columns:
+  - {name: interaction_id, type: STRING, nullable: false, comment: "Interaction identifier (PI followed by eight digits)."}
+  - {name: ebeln, type: STRING, nullable: false, sap_type: CHAR10, comment: "Purchase order number."}
+  - {name: ebelp, type: STRING, nullable: false, sap_type: NUMC5, comment: "Purchase order item."}
+  - {name: lifnr, type: STRING, nullable: false, sap_type: CHAR10, comment: "Vendor number."}
+  - {name: werks, type: STRING, nullable: false, sap_type: CHAR4, comment: "Receiving plant."}
+  - {name: kind, type: STRING, nullable: false, comment: "expedite_request (late order), emergency_buy (ZEX order), or date_inquiry (confirmation chase)."}
+  - {name: opened_at, type: DATE, nullable: false, comment: "Day the exchange started (site-local)."}
+  - {name: closed_at, type: DATE, comment: "Day the exchange ended; NULL while open at the extraction."}
+  - {name: rounds, type: INT, nullable: false, comment: "Messages exchanged in both directions."}
+  - {name: days_to_resolution, type: INT, comment: "Calendar days from opening to closing; NULL while open."}
+  - {name: days_gained, type: INT, nullable: false, comment: "Days the delivery was brought forward by the exchange (0 if none)."}
+  - {name: surcharge_pct, type: "DECIMAL(15,2)", nullable: false, sensitivity: commercial, comment: "Expedite surcharge paid in percent of the line value (0 if none)."}
+  - {name: outcome, type: STRING, nullable: false, comment: "expedited, no_change, confirmed, or open."}
+  - {name: handled_by, type: STRING, nullable: false, sensitivity: pii, comment: "Pseudonymized buyer identifier."}
+tests:
+  accepted_values:
+    - {column: kind, values: [expedite_request, emergency_buy, date_inquiry]}
+    - {column: outcome, values: [expedited, no_change, confirmed, open]}
+  relationships:
+    - {columns: [ebeln], references: raw_sap_ecc.ekko, ref_columns: [ebeln]}
+    - {columns: [lifnr], references: raw_sap_ecc.lfa1, ref_columns: [lifnr]}
+access: [purchasing]

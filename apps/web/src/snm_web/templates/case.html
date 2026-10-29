@@ -1,0 +1,304 @@
+{% extends "base.html" %}
+{% set e = case.engine %}
+{% block title %}{{ case.case_id }}{% endblock %}
+{% block content %}
+<p><a href="/cases">&larr; Cases</a></p>
+<h1>{{ case.case_id }} <span class="tag">{{ case.state }}</span> <span class="tag">{{ case.path }} path</span></h1>
+
+<div class="card">
+  <div class="grid">
+    <div><span>Material</span>{{ case.material }} · {{ e.description }}</div>
+    <div><span>Plant</span>{{ case.plant }} ({{ e.site }})</div>
+    <div><span>Condition</span>{{ e.condition }}{% if e.criticality %} · class {{ e.criticality }}{% endif %}</div>
+    <div><span>Trigger date</span>{{ e.trigger_date }}</div>
+    <div><span>Gap</span>{{ e.gap_qty|qty }} pieces</div>
+    <div><span>Engine lever</span>{{ e.lever }} · {{ e.lever_qty|qty }} by {{ e.coverage_date or "n/a" }}
+      {% if e.covers_in_time %}<span class="tag yes">in time</span>{% else %}<span class="tag no">{{ e.days_short }} days short</span>{% endif %}</div>
+    <div><span>Supplier</span>{{ vendor_name or "none" }}{% if e.vendor %} ({{ e.vendor }}){% endif %}</div>
+    <div><span>Triage</span>{{ e.triage_class }}<br><span>{{ e.triage_reasons }}</span></div>
+    <div><span>Value at risk</span>{{ e.value_usd|money }} USD</div>
+    {% if e.stockout_risk_no_action is not none %}
+    <div><span>If nothing is done</span>{{ e.stockout_risk_no_action|pct }} chance of running out by {{ e.trigger_date }}</div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <h2>Why the engine opened this case</h2>
+  <p>{{ explanation.rationale }}</p>
+  <details><summary>Projected stock from the trigger date</summary>
+  <table>
+    <tr><th>Day</th><th class="num">Projected</th><th class="num">Firm demand</th><th class="num">Forecast</th><th class="num">Receipts</th></tr>
+    {% for r in explanation.projection_from_trigger %}
+    <tr><td>{{ r.day }}</td><td class="num">{{ r.projected_qty|num }}</td><td class="num">{{ r.firm_demand_qty|num }}</td>
+        <td class="num">{{ r.forecast_qty|num }}</td><td class="num">{{ r.receipt_qty|num }}</td></tr>
+    {% endfor %}
+  </table>
+  <p class="muted">Lowest projected stock in the horizon: {{ explanation.min_projected_qty|num }}. Engine {{ explanation.engine.version }}.</p>
+  </details>
+</div>
+
+{% set model = e.demand_model or {} %}
+<div class="card">
+  <div class="card-head">
+    <h2>Options</h2>
+    <span class="muted">USD · estimates, not quotes</span>
+  </div>
+  {% set ranked = rows|selectattr("rank")|list %}
+  <table class="options">
+    <tr>{% if ranked %}<th class="num">Rank</th>{% endif %}<th>Option</th><th>Arrives</th>{% if ranked %}<th>Mandate</th>{% endif %}
+        <th class="num">{{ "Stock-out risk" if risk_shown else "Days below zero" }}</th>
+        <th class="num">Option cost</th><th class="num">{{ "Expected line-down" if risk_shown else "Line-down" }}</th>
+        <th class="num">{{ "Expected total" if risk_shown else "Total" }}</th></tr>
+    {% for r in rows %}
+    <tr class="{{ 'ref' if ranked and r.rank is none else '' }}{{ ' chosen' if planner_rec and r.option == planner_rec.recommended else '' }}">
+      {% if ranked %}<td class="num">{{ r.rank or "" }}</td>{% endif %}
+      <td title="{{ r.option }}">
+        {% if r.option == "no_action" %}Do nothing<span class="sub">the cost of not acting</span>
+        {% else %}{{ r.option|short_id }}
+          {% if r.option == recommended %} <span class="tag rec">recommended</span>{% endif %}
+          {% if planner_rec and r.option == planner_rec.recommended %} <span class="tag rec">planner's choice</span>{% endif %}
+          <span class="sub">{% if r.rank is none %}engine estimate{% if r.option == e.lever %} · engine's lever{% endif %}{% else %}{{ r.kind }}{% endif %}</span>
+        {% endif %}</td>
+      <td class="nowrap">{% if r.arrivals|length > 1 %}{% for q, d in r.arrivals %}{{ q|qty }} on {{ d }}<br>{% endfor %}
+        {% elif r.arrivals %}{{ r.arrivals[0][1] }}{% else %}<span class="muted">none</span>{% endif %}</td>
+      {% if ranked %}<td>{% if r.missed is none %}{% elif r.missed %}{% for k in r.missed %}{% if r.late_priced_by_risk %}<span class="tag warn" title="A C part's late offer competes on its expected cost (record 007)">{{ k }}, priced by risk</span>{% else %}<span class="tag no">{{ k }}</span>{% endif %} {% endfor %}
+        {% else %}<span class="tag yes">in mandate</span>{% endif %}</td>{% endif %}
+      {% if risk_shown %}
+      <td class="num{{ ' good' if r.meets_service_target else '' }}">{{ r.stockout_risk or "" }}</td>
+      {% else %}
+      <td class="num">{{ r.days_below_zero }}</td>
+      {% endif %}
+      <td class="num">{{ r.option_cost|money }}</td>
+      <td class="num">{{ r.line_down|money }}</td>
+      <td class="num"><b>{{ r.expected_total|money }}</b></td>
+    </tr>
+    {% endfor %}
+  </table>
+  <p class="muted note">{% if ranked and ranking_rule == "expected_cost" %}Rank: purchasing's rule (record 007): by
+  expected total, the offers inside the mandate{% if (e.criticality or "C") == "C" %} and, for this C part, those
+  late on arrival only{% endif %} first, then the others by fields missed.
+  {% if not recommended %}None is marked recommended: every proposal misses a mandate field the rule does not price
+  {%- if (e.criticality or "C") == "C" %} (anything but the arrival date alone){% endif %}; the choice is yours.{% endif %}
+  {% elif ranked %}Rank: purchasing's rule (inside the mandate first, then fewest fields missed, then cost). {% endif %}{% if risk_shown %}Stock-out risk: the chance that stock runs out before {{ e.trigger_date }}, or before the option's
+  last part if later, when nothing else is ordered; the class {{ e.criticality or "C" }} target is at most
+  {{ ((1 - model.service_target) * 100)|round|int }}%. The expected line-down weighs that risk in money.{% else %}No calibrated stock-out risk for this material (no outflow in the
+  last 13 weeks); line-down is from the projection.{% endif %}</p>
+  <details><summary>Cost breakdown and definitions</summary>
+  <table>
+    <tr><th>Option</th><th class="num">Price difference</th><th class="num">Surcharge</th><th class="num">Freight</th>
+        <th class="num">Order cost</th><th class="num">Holding</th><th class="num">Option cost</th>
+        <th class="num">Days below zero</th><th class="num">Line-down (projection)</th>
+        {% if risk_shown %}<th class="num">Expected days below zero</th><th class="num">Expected line-down</th>{% endif %}</tr>
+    {% for r in rows %}
+    <tr><td title="{{ r.option }}">{{ "Do nothing" if r.option == "no_action" else r.option|short_id }}</td>
+      <td class="num">{{ r.price_difference_cost|money }}</td><td class="num">{{ r.surcharge_cost|money }}</td>
+      <td class="num">{{ r.freight_cost|money }}</td><td class="num">{{ r.fixed_cost|money }}</td>
+      <td class="num">{{ r.holding_cost|money }}</td><td class="num">{{ r.option_cost|money }}</td>
+      <td class="num">{{ r.days_below_zero }}</td><td class="num">{{ r.stockout_cost|money }}</td>
+      {% if risk_shown %}<td class="num">{{ r.expected_days_below_zero|num }}</td><td class="num">{{ r.expected_line_down_cost|money }}</td>{% endif %}</tr>
+    {% endfor %}
+  </table>
+  <p class="muted">Each option is priced on top of buying the quantity at the reference price{% if e.value_usd and e.gap_qty %}
+  ({{ (e.value_usd / e.gap_qty)|money }} USD per piece){% endif %}: engine options from the reference price, the
+  supplier's usual expedite terms, and the company's cost parameters; proposals from their own terms. Option cost =
+  price difference + surcharge + freight + order cost + holding. The projection's line-down counts the days below zero
+  on the average forecast.{% if risk_shown %} The expected figures come from {{ "{:,}".format(2000) }} simulated demand
+  paths of the material's demand model (Croston-SBA on the last 26 weeks: demand in a week with probability
+  {{ (model.probability * 100)|round|int }} %, sizes as in the weeks with demand), the same paths for every option, over
+  the whole horizon, if nothing else is ordered.{% endif %}</p>
+  </details>
+  {% if planner_available and case.state == "responded" %}
+  <form method="post" action="/cases/{{ case.case_id }}/planner"><input type="hidden" name="task" value="evaluate">
+    <button type="submit">Let the planner agent evaluate the proposals</button>
+    <span class="muted">(about 30 s and USD 0.10; the planner explains the ranking and recommends one)</span></form>
+  {% endif %}
+</div>
+
+{% if is_transfer %}
+<div class="card">
+  <h2>Transfer between the main warehouse and the overflow hub</h2>
+  <p class="muted">Transfer cases are published to logistics in Databricks; logistics reviews and executes the move.
+  The system closes the case when the transfer appears in the data.</p>
+  {% if mode == "local" and case.state in ["new", "prepared"] %}
+  <form method="post" action="/cases/{{ case.case_id }}/simulate/publish-transfer">
+    <button type="submit" class="secondary">Publish to logistics (what the scheduled job does)</button></form>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if not is_transfer and case.state == "new" %}
+<div class="card">
+  <h2>Prepare the supplier request</h2>
+  {% if planner_available %}
+  <form method="post" action="/cases/{{ case.case_id }}/planner"><input type="hidden" name="task" value="prepare">
+    <button type="submit">Let the planner agent prepare it</button>
+    <span class="muted">(about 30 s and USD 0.04; the planner drafts the request or a note)</span></form>
+  {% endif %}
+  <form method="post" action="/cases/{{ case.case_id }}/draft">
+    <label>Request type</label>
+    <select name="request_type">{% for t in request_types %}<option value="{{ t }}">{{ t }}</option>{% endfor %}</select>
+    <label>Request text (only the request's own figures may appear; the server checks it)</label>
+    <textarea name="message">{{ default_text[request_types[0]] }}</textarea>
+    <button type="submit" class="secondary">Draft it myself</button>
+  </form>
+</div>
+{% endif %}
+
+{% if not is_transfer and case.state == "prepared" and draft %}
+<div class="card">
+  <h2>Approve and send to {{ vendor_name }}</h2>
+  <p class="msg out">{{ draft.message }}</p>
+  <form method="post" action="/cases/{{ case.case_id }}/send">
+    <p class="muted">The mandate is what you accept (decision record 004). The supplier never sees the ceilings;
+    proposals are compared with it field by field. {{ defaults.basis }}</p>
+    <div class="row">
+      <div><label>Latest arrival</label><input type="date" name="latest_arrival_date" value="{{ mandate.latest_arrival_date }}"></div>
+      <div><label>Quantity from</label><input name="quantity_min" value="{{ mandate.quantity_min|qty }}"></div>
+      <div><label>Quantity up to</label><input name="quantity_max" value="{{ mandate.quantity_max|qty }}"></div>
+      <div><label>Surcharge at most (%)</label><input name="surcharge_pct_max" value="{{ mandate.surcharge_pct_max }}"></div>
+      <div><label>Freight at most (USD)</label><input name="freight_max_usd" value="{{ mandate.freight_max_usd }}"></div>
+      <div><label>Offer valid at least (days)</label><input name="min_validity_days" value="{{ mandate.min_validity_days }}"></div>
+      <div><label>Exchanges at most</label><input name="max_exchanges" value="{{ mandate.max_exchanges }}"></div>
+    </div>
+    <label>Acceptable kinds</label>
+    <div class="checks">{% for k in mandate_kinds %}<label><input type="checkbox" name="allowed_kinds" value="{{ k }}"
+      {% if k in mandate.allowed_kinds %}checked{% endif %}> {{ k }}</label>{% endfor %}</div>
+    <button type="submit">Approve and send (with the request sheet)</button>
+  </form>
+</div>
+{% endif %}
+
+{% if planner_rec %}
+<div class="card">
+  <div class="card-head">
+    <h2>{{ "Planner recommendation" if planner_rec.by_agent else "Recommendation" }}</h2>
+    <span class="muted">{{ planner_rec.at }} UTC{% if planner_rec.run_id %} · run {{ planner_rec.run_id }}{% endif %}</span>
+  </div>
+  <p class="muted">A proposal for you to weigh; the decision below is yours. Its choice is marked in the options table.</p>
+  {% if planner_rec.stale %}
+  <p class="notice">New proposals arrived after this recommendation; the options table already includes them. Ask the planner again for a new one.</p>
+  {% endif %}
+  {% if planner_rec.submitted_order %}
+  <p class="muted">The planner submitted another order of the proposals: {{ planner_rec.submitted_order|map("short_id")|join(", ") }}.</p>
+  {% endif %}
+  <div class="rationale">{{ planner_rec.rationale_text }}</div>
+</div>
+{% endif %}
+
+{% if not is_transfer and case.state in ["new", "prepared", "sent", "responded", "recommended"] %}
+<div class="card">
+  <h2>Decision</h2>
+  <form method="post" action="/cases/{{ case.case_id }}/decide">
+    <label>Choose</label>
+    {% set planner_choice = planner_rec.recommended if planner_rec else none %}
+    <select name="choice">{% for c in choices %}<option value="{{ c }}" {% if c == decision_default %}selected{% endif %}>{{ c|short_id }}
+      {%- if c == recommended and c == planner_choice %} (recommended, planner's choice)
+      {%- elif c == recommended %} (recommended)
+      {%- elif c == planner_choice %} (planner's choice){% endif %}</option>{% endfor %}</select>
+    <label>Rationale (kept with the decision; {{ "required when you choose anything but the preselected option" if decision_default else "required: nothing is recommended" }})</label><textarea name="rationale"></textarea>
+    <button type="submit">Record the decision</button>
+    <span class="muted">Any choice except no_action is published to logistics in Databricks.</span>
+  </form>
+</div>
+{% endif %}
+
+{% if mode == "local" and case.state == "handed_off" %}
+<div class="card">
+  <h2>Receipt (simulation)</h2>
+  <p class="muted">In production the case closes when the goods receipt or the transfer appears in the data. Here you
+  can post it to see the case close.</p>
+  <form method="post" action="/cases/{{ case.case_id }}/simulate/receipt" class="row">
+    <div><label>Quantity received</label><input name="quantity" value="{{ receipt.quantity|qty }}"></div>
+    <div><label>Date</label><input type="date" name="received" value="{{ receipt.date }}"></div>
+    <div><label>&nbsp;</label><button type="submit" class="secondary" style="margin:0">Post the receipt</button></div>
+  </form>
+</div>
+{% endif %}
+
+{% if case.proposals %}
+<div class="card">
+  <h2>Supplier proposals as quoted</h2>
+  <table>
+    <tr><th>Proposal</th><th>Kind</th><th class="num">Qty</th><th>Ship</th><th>Arrival</th><th class="num">Unit price</th>
+        <th class="num">Surcharge</th><th class="num">Freight</th><th>Valid until</th><th>Conditions</th><th>By</th></tr>
+    {% for p in case.proposals %}
+    <tr>
+      <td title="{{ p.proposal_id }}">{{ p.proposal_id|short_id }}
+        {% set ev = evaluations.get(p.proposal_id) %}
+        {% if not risk_shown and p.within_mandate and not p.within_mandate.arrival and ev and ev.days_below_zero == 0 %}
+        <div class="muted">Outside on arrival, but the projection shows no day below zero with this option.</div>{% endif %}</td>
+      <td>{{ p.kind }}</td><td class="num">{{ p.quantity|qty }}</td><td class="nowrap">{{ p.ship_date or "" }}</td>
+      <td class="nowrap">{{ p.arrival_date or "" }}{% for s in p.split_deliveries %}<br>{{ s.quantity|qty }} on {{ s.arrival_date }}{% endfor %}</td>
+      <td class="num">{{ p.unit_price|money }}</td>
+      <td class="num">{% if p.surcharge_pct is not none %}{{ p.surcharge_pct }} %{% else %}{{ p.surcharge_amount|money }}{% endif %}</td>
+      <td class="num">{{ p.freight_amount|money }}</td><td class="nowrap">{{ p.valid_until or "" }}</td><td>{{ p.conditions or "" }}</td><td>{{ p.recorded_by }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endif %}
+
+{% if case.messages %}
+<div class="card">
+  <h2>Conversation with {{ vendor_name }}</h2>
+  {% for m in case.messages %}
+  <div class="msg {{ 'in' if m.direction == 'inbound' else 'out' }}"><b>{{ 'Supplier' if m.direction == 'inbound' else 'Purchasing' }}</b> · {{ m.message_id }}
+{{ m.body }}</div>
+  {% endfor %}
+  {% if case.state in ["sent", "responded", "recommended"] %}
+  <form method="post" action="/cases/{{ case.case_id }}/message">
+    <label>Message to the supplier</label><textarea name="body"></textarea>
+    <button type="submit" class="secondary">Send message</button></form>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if case.mandate and case.state not in ["prepared"] %}
+<div class="card">
+  <h2>Mandate in force</h2>
+  <div class="grid">
+    <div><span>Latest arrival</span>{{ case.mandate.latest_arrival_date }}</div>
+    <div><span>Quantity</span>{{ case.mandate.quantity_min|qty }} to {{ case.mandate.quantity_max|qty }}</div>
+    <div><span>Surcharge at most</span>{{ case.mandate.surcharge_pct_max }} %</div>
+    <div><span>Freight at most</span>{{ case.mandate.freight_max_usd|money }} USD</div>
+    <div><span>Validity</span>{{ case.mandate.min_validity_days }} days</div>
+    <div><span>Kinds</span>{{ case.mandate.allowed_kinds|join(", ") }}</div>
+  </div>
+</div>
+{% endif %}
+
+{% if case.attachments %}
+<div class="card">
+  <h2>Files</h2>
+  <table><tr><th>File</th><th>Direction</th><th class="num">Options read</th><th>By</th><th>SHA-256</th><th>When</th></tr>
+  {% for a in case.attachments %}
+  <tr><td><a href="/cases/{{ case.case_id }}/files/{{ a.attachment_id }}">{{ a.file_name }}</a></td><td>{{ a.direction }}</td>
+      <td class="num">{{ a.parsed_options }}</td><td>{{ a.uploaded_by }}</td><td class="muted">{{ a.sha256[:12] }}</td><td>{{ a.at }}</td></tr>
+  {% endfor %}</table>
+</div>
+{% endif %}
+
+<div class="card">
+  <h2>History</h2>
+  <details><summary>{% if events %}{{ events|length }} events, last: {{ events[-1].event_type }}{% else %}No events yet{% endif %}</summary>
+  <table><tr><th>#</th><th>Event</th><th>By</th><th>State after</th><th>When</th></tr>
+  {% for ev in events %}
+  <tr><td>{{ ev.seq }}</td><td>{{ ev.event_type }}</td><td>{{ ev.actor }}</td><td>{{ ev.state_after }}</td><td>{{ ev.at }}</td></tr>
+  {% endfor %}</table>
+  </details>
+  <details><summary>Add a note, override the triage, or cancel</summary>
+    <form method="post" action="/cases/{{ case.case_id }}/note"><label>Note</label><textarea name="text"></textarea>
+      <button type="submit" class="secondary">Add note</button></form>
+    {% if case.state not in ["closed", "cancelled"] %}
+    <form method="post" action="/cases/{{ case.case_id }}/triage" class="row">
+      <div><label>Path</label><select name="path"><option value="human">human</option><option value="agent">agent</option></select></div>
+      <div><label>Reason</label><input name="reason"></div>
+      <div><label>&nbsp;</label><button type="submit" class="secondary" style="margin:0">Override triage</button></div></form>
+    <form method="post" action="/cases/{{ case.case_id }}/cancel" class="row">
+      <div><label>Reason</label><input name="reason"></div>
+      <div><label>&nbsp;</label><button type="submit" class="danger" style="margin:0">Cancel the case</button></div></form>
+    {% endif %}
+  </details>
+</div>
+{% endblock %}

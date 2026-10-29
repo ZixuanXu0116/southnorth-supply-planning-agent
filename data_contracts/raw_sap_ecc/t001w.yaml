@@ -1,0 +1,23 @@
+table: raw_sap_ecc.t001w
+layer: raw
+source_system: SAP_ECC
+description: Plants (SAP table T001W). Organizational master data replicated from ECC.
+grain: One row per client and plant.
+primary_key: [mandt, werks]
+domain: MasterData
+subdomain: MasterData/Organization
+sensitivity: internal
+site_key: {column: werks, kind: plant}
+columns:
+  - {name: mandt, type: STRING, nullable: false, sap_type: CLNT3, comment: "SAP client."}
+  - {name: werks, type: STRING, nullable: false, sap_type: CHAR4, comment: "Plant code (US10 = Round Rock, CN10 = Shenzhen)."}
+  - {name: name1, type: STRING, nullable: false, sap_type: CHAR30, comment: "Plant name."}
+  - {name: ort01, type: STRING, nullable: false, sap_type: CHAR25, comment: "City."}
+  - {name: land1, type: STRING, nullable: false, sap_type: CHAR3, comment: "Country key (ISO alpha-2)."}
+  - {name: regio, type: STRING, nullable: true, sap_type: CHAR3, comment: "Region (state / province code)."}
+  - {name: bwkey, type: STRING, nullable: false, sap_type: CHAR4, comment: "Valuation area; equals the plant code in this system."}
+  - {name: fabkl, type: STRING, nullable: false, sap_type: CHAR2, comment: "Factory calendar key (US or CN holiday calendar)."}
+tests:
+  accepted_values:
+    - {column: werks, values: [US10, CN10]}
+access: [ops_analyst_global, site_manager_rr, site_manager_cn, trade_compliance]

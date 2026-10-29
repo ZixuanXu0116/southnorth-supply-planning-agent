@@ -1,0 +1,25 @@
+table: raw_sap_ecc.marm
+layer: raw
+source_system: SAP_ECC
+description: Units of measure per material (SAP table MARM). Quantity in base unit = quantity in alternative unit * UMREZ / UMREN.
+grain: One row per client, material, and unit of measure (including the base unit).
+primary_key: [mandt, matnr, meinh]
+domain: MasterData
+subdomain: MasterData/Material
+sensitivity: internal
+columns:
+  - {name: mandt, type: STRING, nullable: false, sap_type: CLNT3, comment: "SAP client."}
+  - {name: matnr, type: STRING, nullable: false, sap_type: CHAR18, comment: "Material number (18-character, zero-padded)."}
+  - {name: meinh, type: STRING, nullable: false, sap_type: UNIT3, comment: "Unit of measure (base or alternative)."}
+  - {name: umrez, type: "DECIMAL(5,0)", nullable: false, sap_type: DEC5, comment: "Numerator for conversion to the base unit."}
+  - {name: umren, type: "DECIMAL(5,0)", nullable: false, sap_type: DEC5, comment: "Denominator for conversion to the base unit."}
+  - {name: laeng, type: "DECIMAL(13,3)", nullable: false, sap_type: QUAN13_3, comment: "Length in unit MEABM."}
+  - {name: breit, type: "DECIMAL(13,3)", nullable: false, sap_type: QUAN13_3, comment: "Width in unit MEABM."}
+  - {name: hoehe, type: "DECIMAL(13,3)", nullable: false, sap_type: QUAN13_3, comment: "Height in unit MEABM."}
+  - {name: meabm, type: STRING, nullable: false, sap_type: UNIT3, comment: "Unit of dimension (CM)."}
+  - {name: brgew, type: "DECIMAL(13,3)", nullable: false, sap_type: QUAN13_3, comment: "Gross weight of one unit MEINH, in unit GEWEI."}
+  - {name: gewei, type: STRING, nullable: false, sap_type: UNIT3, comment: "Weight unit."}
+tests:
+  relationships:
+    - {columns: [mandt, matnr], references: raw_sap_ecc.mara, ref_columns: [mandt, matnr]}
+access: [ops_analyst_global, site_manager_rr, site_manager_cn]

@@ -1,0 +1,24 @@
+table: raw_sap_ecc.mkol
+layer: raw
+source_system: SAP_ECC
+description: Special stock from vendors (SAP table MKOL); in this dataset vendor consignment stock (SOBKZ K) at Longgang. The stock belongs to the vendor until it is withdrawn into own stock.
+grain: One row per client, material, plant, storage location, special stock indicator, and vendor.
+primary_key: [mandt, matnr, werks, lgort, sobkz, lifnr]
+domain: Inventory
+subdomain: Inventory/Stock
+sensitivity: internal
+site_key: {column: werks, kind: plant}
+columns:
+  - {name: mandt, type: STRING, nullable: false, sap_type: CLNT3, comment: "SAP client."}
+  - {name: matnr, type: STRING, nullable: false, sap_type: CHAR18, comment: "Material number."}
+  - {name: werks, type: STRING, nullable: false, sap_type: CHAR4, comment: "Plant."}
+  - {name: lgort, type: STRING, nullable: false, sap_type: CHAR4, comment: "Storage location."}
+  - {name: sobkz, type: STRING, nullable: false, sap_type: CHAR1, comment: "Special stock indicator: K = vendor consignment."}
+  - {name: lifnr, type: STRING, nullable: false, sap_type: CHAR10, comment: "Vendor who owns the stock."}
+  - {name: slabs, type: "DECIMAL(13,3)", nullable: false, sap_type: QUAN13_3, comment: "Unrestricted-use special stock in base unit."}
+tests:
+  accepted_values:
+    - {column: sobkz, values: [K]}
+  relationships:
+    - {columns: [mandt, lifnr], references: raw_sap_ecc.lfa1, ref_columns: [mandt, lifnr]}
+access: [ops_analyst_global, site_manager_rr, site_manager_cn]

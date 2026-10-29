@@ -1,0 +1,22 @@
+[project]
+name = "snm-ask"
+version = "0.0.0"
+description = "Local question page for the data agent: ask, follow up, read the provenance and the cost, flag wrong answers."
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "jinja2>=3.1",
+    "markupsafe>=2.1",
+    "python-multipart>=0.0.18",
+    "uvicorn>=0.30",
+]
+
+[project.scripts]
+snm-ask = "snm_ask.cli:main"
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/snm_ask"]

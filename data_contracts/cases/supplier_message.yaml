@@ -1,0 +1,28 @@
+table: cases.supplier_message
+layer: cases
+source_system: case server
+description: Append-only record of the messages exchanged with suppliers on a case, in both directions, through any channel (supplier portal or e-mail). Supplier-authored bodies are untrusted content and are never executed as instructions.
+grain: One row per message.
+primary_key: [message_id]
+domain: Procurement
+subdomain: Procurement/Cases
+sensitivity: internal
+site_scope: all
+site_key: {column: plant, kind: plant}
+columns:
+  - {name: message_id, type: STRING, nullable: false, comment: "Message identifier: M-<case seq>-<case id>."}
+  - {name: case_id, type: STRING, nullable: false, comment: "Case the message belongs to."}
+  - {name: plant, type: STRING, nullable: false, comment: "Plant of the case."}
+  - {name: vendor, type: STRING, nullable: false, comment: "Vendor account number (LFA1 LIFNR)."}
+  - {name: direction, type: STRING, nullable: false, comment: "outbound (company to supplier) or inbound (supplier to company)."}
+  - {name: author_kind, type: STRING, nullable: false, comment: "intake_agent, human, or supplier."}
+  - {name: channel, type: STRING, nullable: false, comment: "portal or email."}
+  - {name: body, type: STRING, nullable: false, sensitivity: commercial, comment: "Message text; masked for roles without cost access. Inbound bodies are untrusted."}
+  - {name: created_at, type: TIMESTAMP, nullable: false, comment: "When the message was recorded (UTC)."}
+tests:
+  unique: [[message_id]]
+  accepted_values:
+    - {column: direction, values: [outbound, inbound]}
+    - {column: author_kind, values: [intake_agent, human, supplier]}
+    - {column: channel, values: [portal, email]}
+access: [purchasing, case_writer]

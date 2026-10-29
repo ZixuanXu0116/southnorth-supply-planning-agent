@@ -1,0 +1,27 @@
+table: raw_sap_ewm.scdl_db_proch_i
+layer: raw
+source_system: SAP_EWM
+description: Inbound delivery headers in EWM (table /SCDL/DB_PROCH_I, simplified). One inbound delivery per purchase order receipt at the EWM-managed storage locations of Round Rock (RR01) and Longgang (SZ01, including the bonded area); created from the supplier's shipping notification.
+grain: One row per client and inbound delivery.
+primary_key: [mandt, docid]
+domain: Inbound
+subdomain: Inbound/Receiving
+sensitivity: internal
+site_key: {column: lgnum, kind: warehouse}
+columns:
+  - {name: mandt, type: STRING, nullable: false, sap_type: CLNT3, comment: "SAP client."}
+  - {name: docid, type: STRING, nullable: false, sap_type: RAW16, comment: "Document GUID."}
+  - {name: docno, type: STRING, nullable: false, sap_type: CHAR35, comment: "EWM document number."}
+  - {name: doccat, type: STRING, nullable: false, sap_type: CHAR3, comment: "Document category: PDI = inbound delivery."}
+  - {name: doctype, type: STRING, nullable: false, sap_type: CHAR4, comment: "Document type: INB = standard receipt, INBX = expedited receipt."}
+  - {name: lgnum, type: STRING, nullable: false, sap_type: CHAR4, comment: "Warehouse number (simplified; the standard table stores the warehouse in a separate field)."}
+  - {name: deldate, type: STRING, nullable: false, sap_type: DATS, comment: "Planned delivery date (receiving site local date)."}
+  - {name: cretst, type: "DECIMAL(15,0)", nullable: false, sap_type: DEC15, comment: "Creation timestamp (UTC)."}
+  - {name: creusr, type: STRING, nullable: false, sap_type: CHAR12, comment: "Creating user."}
+tests:
+  unique: [[mandt, docno]]
+  accepted_values:
+    - {column: doccat, values: [PDI]}
+    - {column: doctype, values: [INB, INBX]}
+    - {column: lgnum, values: [RR01, SZ01]}
+access: [ops_analyst_global, site_manager_rr, site_manager_cn]

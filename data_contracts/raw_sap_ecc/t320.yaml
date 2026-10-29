@@ -1,0 +1,21 @@
+table: raw_sap_ecc.t320
+layer: raw
+source_system: SAP_ECC
+description: Assignment of plant and storage location to a warehouse number (SAP table T320). Storage locations without a row are inventory-managed only (no bins).
+grain: One row per client, plant, and storage location assigned to a warehouse.
+primary_key: [mandt, werks, lgort]
+domain: MasterData
+subdomain: MasterData/Organization
+sensitivity: internal
+site_key: {column: werks, kind: plant}
+columns:
+  - {name: mandt, type: STRING, nullable: false, sap_type: CLNT3, comment: "SAP client."}
+  - {name: werks, type: STRING, nullable: false, sap_type: CHAR4, comment: "Plant code."}
+  - {name: lgort, type: STRING, nullable: false, sap_type: CHAR4, comment: "Storage location code."}
+  - {name: lgnum, type: STRING, nullable: false, sap_type: CHAR4, comment: "EWM warehouse number (RR01, SZ01, DG01)."}
+tests:
+  accepted_values:
+    - {column: lgnum, values: [RR01, SZ01, DG01]}
+  relationships:
+    - {columns: [mandt, werks, lgort], references: raw_sap_ecc.t001l, ref_columns: [mandt, werks, lgort]}
+access: [ops_analyst_global, site_manager_rr, site_manager_cn]

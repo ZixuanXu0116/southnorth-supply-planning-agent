@@ -1,0 +1,23 @@
+table: raw_sap_ewm.sapapo_matlwh
+layer: raw
+source_system: SAP_EWM
+description: Warehouse-specific product data in EWM (table /SAPAPO/MATLWH, simplified). The putaway control indicator (PUT_STRA, "PACI") selects the storage type search sequence used to find a destination bin at putaway. Values are the configuration at extraction time; the table keeps no history.
+grain: One row per client, warehouse number, and product.
+primary_key: [mandt, lgnum, matid]
+domain: Inbound
+subdomain: Inbound/Putaway
+sensitivity: internal
+site_key: {column: lgnum, kind: warehouse}
+columns:
+  - {name: mandt, type: STRING, nullable: false, sap_type: CLNT3, comment: "SAP client."}
+  - {name: lgnum, type: STRING, nullable: false, sap_type: CHAR4, comment: "Warehouse number (simplified; the standard table uses the supply chain unit)."}
+  - {name: matid, type: STRING, nullable: false, sap_type: RAW16, comment: "Product GUID; join to sapapo_matkey for the product number."}
+  - {name: put_stra, type: STRING, nullable: false, sap_type: CHAR4, comment: "Putaway control indicator (PACI): storage type search sequence code."}
+  - {name: rem_stra, type: STRING, nullable: false, sap_type: CHAR4, comment: "Stock removal control indicator."}
+tests:
+  accepted_values:
+    - {column: put_stra, values: [CAGE, HRCK, SHLF, ASTR, BULK]}
+    - {column: rem_stra, values: [FIFO]}
+  relationships:
+    - {columns: [mandt, matid], references: raw_sap_ewm.sapapo_matkey, ref_columns: [mandt, matid]}
+access: [ops_analyst_global, site_manager_rr, site_manager_cn]

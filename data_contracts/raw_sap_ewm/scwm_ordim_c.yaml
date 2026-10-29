@@ -1,0 +1,54 @@
+table: raw_sap_ewm.scwm_ordim_c
+layer: raw
+source_system: SAP_EWM
+description: Confirmed and cancelled warehouse tasks (EWM table /SCWM/ORDIM_C) for picking (outbound) and putaway (inbound); filter by process type. Timestamps are DEC15 (YYYYMMDDhhmmss) in UTC; *_WH fields are in the warehouse time zone. For cancelled tasks (TOSTAT = A), CONFIRMED_AT holds the cancellation time. CONFIRMED_BY can be a system user (WF-BATCH, AS-INTERFACE, RFC-EWM).
+grain: One row per client, warehouse number, warehouse task, and task item.
+primary_key: [mandt, lgnum, tanum, tapos]
+domain: WarehouseOperations
+subdomain: WarehouseOperations/Tasks
+sensitivity: restricted
+site_key: {column: lgnum, kind: warehouse}
+columns:
+  - {name: mandt, type: STRING, nullable: false, sap_type: CLNT3, comment: "SAP client."}
+  - {name: lgnum, type: STRING, nullable: false, sap_type: CHAR4, comment: "Warehouse number."}
+  - {name: tanum, type: STRING, nullable: false, sap_type: NUMC12, comment: "Warehouse task number."}
+  - {name: tapos, type: STRING, nullable: false, sap_type: NUMC4, comment: "Warehouse task item."}
+  - {name: tostat, type: STRING, nullable: false, sap_type: CHAR1, comment: "Task status in this dataset: C = confirmed, A = cancelled."}
+  - {name: procty, type: STRING, nullable: false, sap_type: CHAR4, comment: "Warehouse process type: 2010 = pick for outbound delivery, 2020 = emergency pick, 1011 = putaway from goods receipt."}
+  - {name: trart, type: STRING, nullable: false, sap_type: CHAR1, comment: "Process category: 1 = putaway, 2 = stock removal."}
+  - {name: matid, type: STRING, nullable: false, sap_type: RAW16, comment: "Product GUID; join to sapapo_matkey for the product number."}
+  - {name: vsolm, type: "DECIMAL(31,14)", nullable: false, sap_type: QUAN31_14, comment: "Target quantity in base unit MEINS."}
+  - {name: meins, type: STRING, nullable: false, sap_type: UNIT3, comment: "Base unit of measure."}
+  - {name: vsola, type: "DECIMAL(31,14)", nullable: false, sap_type: QUAN31_14, comment: "Target quantity in alternative unit ALTME."}
+  - {name: altme, type: STRING, nullable: false, sap_type: UNIT3, comment: "Alternative unit of measure."}
+  - {name: vltyp, type: STRING, nullable: false, sap_type: CHAR4, comment: "Source storage type."}
+  - {name: vlpla, type: STRING, nullable: false, sap_type: CHAR18, comment: "Source storage bin."}
+  - {name: nltyp, type: STRING, nullable: false, sap_type: CHAR4, comment: "Destination storage type."}
+  - {name: nlpla, type: STRING, nullable: false, sap_type: CHAR18, comment: "Destination storage bin."}
+  - {name: who, type: STRING, nullable: false, sap_type: NUMC10, comment: "Warehouse order."}
+  - {name: wave, type: STRING, nullable: false, sap_type: NUMC10, comment: "Wave the task belongs to; 0000000000 (no wave) for putaway tasks."}
+  - {name: rdoccat, type: STRING, nullable: false, sap_type: CHAR3, comment: "Reference document category: PDO = outbound delivery order, PDI = inbound delivery."}
+  - {name: rdocid, type: STRING, nullable: false, sap_type: RAW16, comment: "Reference document GUID (EWM outbound delivery order or inbound delivery)."}
+  - {name: ritmid, type: STRING, nullable: false, sap_type: RAW16, comment: "Reference document item GUID."}
+  - {name: created_by, type: STRING, nullable: false, sap_type: CHAR12, comment: "User or job that created the task."}
+  - {name: created_at, type: "DECIMAL(15,0)", nullable: false, sap_type: DEC15, comment: "Creation timestamp (UTC)."}
+  - {name: created_at_wh, type: "DECIMAL(15,0)", nullable: false, sap_type: DEC15, comment: "Creation timestamp in the warehouse time zone."}
+  - {name: started_at, type: "DECIMAL(15,0)", nullable: false, sap_type: DEC15, comment: "Execution start timestamp (UTC); 0 if never started."}
+  - {name: confirmed_at, type: "DECIMAL(15,0)", nullable: false, sap_type: DEC15, comment: "Confirmation timestamp (UTC); cancellation timestamp for cancelled tasks."}
+  - {name: confirmed_at_wh, type: "DECIMAL(15,0)", nullable: false, sap_type: DEC15, comment: "Confirmation timestamp in the warehouse time zone."}
+  - {name: confirmed_by, type: STRING, nullable: false, sap_type: CHAR12, sensitivity: restricted, comment: "User who confirmed or cancelled the task (pseudonymized operator user or system user)."}
+  - {name: prsrc, type: STRING, nullable: false, sap_type: CHAR18, comment: "Resource used (RF device or AutoStore port)."}
+tests:
+  accepted_values:
+    - {column: tostat, values: [C, A]}
+    - {column: procty, values: ["2010", "2020", "1011"]}
+    - {column: trart, values: ["1", "2"]}
+    - {column: rdoccat, values: [PDO, PDI]}
+  relationships:
+    - {columns: [mandt, matid], references: raw_sap_ewm.sapapo_matkey, ref_columns: [mandt, matid]}
+    - {columns: [mandt, lgnum, wave], references: raw_sap_ewm.scwm_wavehdr, ref_columns: [mandt, lgnum, wave], where: {trart: "2"}}
+    - {columns: [mandt, lgnum, vlpla], references: raw_sap_ewm.scwm_lagp, ref_columns: [mandt, lgnum, lgpla]}
+    - {columns: [mandt, rdocid, ritmid], references: raw_sap_ewm.scdl_db_proci_o, ref_columns: [mandt, docid, itemid], where: {rdoccat: PDO}}
+    - {columns: [mandt, rdocid, ritmid], references: raw_sap_ewm.scdl_db_proci_i, ref_columns: [mandt, docid, itemid], where: {rdoccat: PDI}}
+    - {columns: [mandt, lgnum, nlpla], references: raw_sap_ewm.scwm_lagp, ref_columns: [mandt, lgnum, lgpla]}
+access: [ops_analyst_global, site_manager_rr, site_manager_cn]

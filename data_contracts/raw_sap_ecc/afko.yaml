@@ -1,0 +1,23 @@
+table: raw_sap_ecc.afko
+layer: raw
+source_system: SAP_ECC
+description: Production order headers (SAP table AFKO) of the assembly buildings at Round Rock and Longgang. Planned and actual start and finish dates; the reservation number links the component requirements in RESB.
+grain: One row per client and production order.
+primary_key: [mandt, aufnr]
+domain: Manufacturing
+subdomain: Manufacturing/Production orders
+sensitivity: internal
+columns:
+  - {name: mandt, type: STRING, nullable: false, sap_type: CLNT3, comment: "SAP client."}
+  - {name: aufnr, type: STRING, nullable: false, sap_type: CHAR12, comment: "Production order number."}
+  - {name: rsnum, type: STRING, nullable: false, sap_type: NUMC10, comment: "Reservation number of the order's component requirements (RESB)."}
+  - {name: plnbez, type: STRING, nullable: false, sap_type: CHAR18, comment: "Material produced (finished product, material type FERT)."}
+  - {name: gamng, type: "DECIMAL(13,3)", nullable: false, sap_type: QUAN13_3, comment: "Total order quantity."}
+  - {name: gmein, type: STRING, nullable: false, sap_type: UNIT3, comment: "Unit of the order quantity."}
+  - {name: erdat, type: STRING, nullable: false, sap_type: DATS, comment: "Creation date (site-local)."}
+  - {name: ftrmi, type: STRING, nullable: false, sap_type: DATS, comment: "Actual release date."}
+  - {name: gstrp, type: STRING, nullable: false, sap_type: DATS, comment: "Basic (planned) start date; the components are required on this day."}
+  - {name: gltrp, type: STRING, nullable: false, sap_type: DATS, comment: "Basic (planned) finish date."}
+  - {name: gstri, type: STRING, nullable: false, sap_type: DATS, comment: "Actual start date; 00000000 while the order waits for its components."}
+  - {name: getri, type: STRING, nullable: false, sap_type: DATS, comment: "Actual finish date; 00000000 while the order is in process."}
+access: [ops_analyst_global, site_manager_rr, site_manager_cn, purchasing]

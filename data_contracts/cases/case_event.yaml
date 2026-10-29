@@ -1,0 +1,31 @@
+table: cases.case_event
+layer: cases
+source_system: case server
+description: Append-only event log of the replenishment cases. Every state change, draft, proposal, recommendation, and human decision is one event; the current state of a case is derived from its events. Written only by the case server (and the engine run for engine events); rows are never updated or deleted (Delta appendOnly).
+grain: One row per case event.
+primary_key: [case_id, seq]
+domain: Procurement
+subdomain: Procurement/Cases
+sensitivity: internal
+site_scope: all
+site_key: {column: plant, kind: plant}
+columns:
+  - {name: case_id, type: STRING, nullable: false, comment: "Case identifier: C-<plant>-<material>-<SH|WA|EX>-<first trigger date>; stable while the case is open."}
+  - {name: seq, type: INT, nullable: false, comment: "Sequence number of the event within the case, from 1."}
+  - {name: event_type, type: STRING, nullable: false, comment: "Event type (see accepted values); the payload schema depends on it."}
+  - {name: state_after, type: STRING, nullable: false, comment: "Case state after the event: new, prepared, sent, responded, recommended, decided, handed_off, closed, or cancelled."}
+  - {name: plant, type: STRING, nullable: false, comment: "Plant of the case: US10 or CN10."}
+  - {name: material, type: STRING, nullable: false, comment: "Material number without leading zeros."}
+  - {name: actor_kind, type: STRING, nullable: false, comment: "Who caused the event: engine, planner_agent, intake_agent, human, or system."}
+  - {name: actor_role, type: STRING, nullable: false, comment: "Role the actor acted under (for example purchasing, site_manager_rr, engine)."}
+  - {name: facts, type: STRING, nullable: false, comment: "Non-commercial fields of the payload as JSON (quantities, dates, purchase order, lever, reason codes); readable by logistics roles."}
+  - {name: payload, type: STRING, nullable: false, sensitivity: commercial, comment: "Full event payload as JSON; schema per event type. May hold prices, surcharges, and message text, so it is masked for roles without cost access."}
+  - {name: run_id, type: STRING, nullable: true, comment: "Agent run or engine run that produced the event; NULL for human actions."}
+  - {name: created_at, type: TIMESTAMP, nullable: false, comment: "When the event was recorded (UTC)."}
+tests:
+  unique: [[case_id, seq]]
+  accepted_values:
+    - {column: event_type, values: [case_opened, case_updated, condition_cleared, request_drafted, transfer_prepared, triage_overridden, request_sent, message_recorded, proposal_recorded, escalated, recommendation_proposed, decision_requested, decision_recorded, handoff_drafted, handed_off, receipt_confirmed, case_cancelled, note_added, mandate_set, attachment_recorded]}
+    - {column: state_after, values: [new, prepared, sent, responded, recommended, decided, handed_off, closed, cancelled]}
+    - {column: actor_kind, values: [engine, planner_agent, intake_agent, human, system]}
+access: [ops_analyst_global, site_manager_rr, site_manager_cn, purchasing, case_writer]

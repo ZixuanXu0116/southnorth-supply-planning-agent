@@ -1,0 +1,25 @@
+table: raw_sap_ecc.afpo
+layer: raw
+source_system: SAP_ECC
+description: Production order items (SAP table AFPO), one per order, with the product, the order quantity, the delivered (produced) quantity, and the plants.
+grain: One row per client, production order, and item.
+primary_key: [mandt, aufnr, posnr]
+domain: Manufacturing
+subdomain: Manufacturing/Production orders
+sensitivity: internal
+site_key: {column: pwerk, kind: plant}
+columns:
+  - {name: mandt, type: STRING, nullable: false, sap_type: CLNT3, comment: "SAP client."}
+  - {name: aufnr, type: STRING, nullable: false, sap_type: CHAR12, comment: "Production order number."}
+  - {name: posnr, type: STRING, nullable: false, sap_type: NUMC4, comment: "Order item."}
+  - {name: matnr, type: STRING, nullable: false, sap_type: CHAR18, comment: "Material produced."}
+  - {name: psmng, type: "DECIMAL(13,3)", nullable: false, sap_type: QUAN13_3, comment: "Order item quantity."}
+  - {name: wemng, type: "DECIMAL(13,3)", nullable: false, sap_type: QUAN13_3, comment: "Quantity delivered to stock so far (0 until the order finishes)."}
+  - {name: meins, type: STRING, nullable: false, sap_type: UNIT3, comment: "Base unit."}
+  - {name: pwerk, type: STRING, nullable: false, sap_type: CHAR4, comment: "Production plant: US10 (Round Rock assembly) or CN10 (Longgang assembly)."}
+  - {name: dwerk, type: STRING, nullable: false, sap_type: CHAR4, comment: "Delivering plant."}
+  - {name: ltrmi, type: STRING, nullable: false, sap_type: DATS, comment: "Actual delivery date of the finished product; 00000000 until the order finishes."}
+tests:
+  relationships:
+    - {columns: [mandt, aufnr], references: raw_sap_ecc.afko, ref_columns: [mandt, aufnr]}
+access: [ops_analyst_global, site_manager_rr, site_manager_cn, purchasing]
