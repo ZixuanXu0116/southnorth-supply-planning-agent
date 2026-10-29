@@ -80,6 +80,20 @@ flowchart TB
 
 Technical details: [`docs/TECHNICAL.md`](docs/TECHNICAL.md).
 
+## Try it locally
+
+No keys or cloud account needed for the case pages (Python 3.11 with `uv`; macOS or Linux, WSL on Windows):
+
+```bash
+git clone https://github.com/ZixuanXu0116/southnorth-supply-planning-agent && cd southnorth-supply-planning-agent
+uv sync
+uv run snm-data generate --profile small    # synthetic SAP-shaped data, about a minute
+uv run snm-data plan --from-profile small   # the engine opens the cases
+uv run snm-web serve                        # open http://127.0.0.1:8000 and choose Purchasing
+```
+
+The planner buttons also need Node 22 (`npm ci && npm run build -w harness`) and an Anthropic key (`SNM_ANTHROPIC_API_KEY`, `SNM_MODEL_MAIN`); the data agent needs a Databricks workspace ([developer guide](docs/DEVELOPMENT.md)). This is a design and workflow demo that runs locally, not a hosted service.
+
 ## Status (2026-10-29)
 
 - **Built:** engine, case store, purchasing and supplier pages, planner agent, data agent, governance, evaluation; runs locally and on Databricks Free Edition.
