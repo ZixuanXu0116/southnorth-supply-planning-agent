@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 
 from snm_data.cli import REPO_ROOT
@@ -70,6 +71,15 @@ def main(argv: list[str] | None = None) -> None:
     evaluate.add_argument("--parallel", type=int, default=3)
     evaluate.add_argument("--batch", default="planner-evaluate")
     evaluate.add_argument("--report", action="store_true", help="also write the report to evals/reports/")
+    mutate = commands.add_parser(
+        "verifier-mutations", help="catch rate and false alarms of the verifier on mutated recommendations"
+    )
+    mutate.add_argument("--planning", help="local planning run (default: latest out/planning/*)")
+    mutate.add_argument("--per-mix", type=int, default=3)
+    mutate.add_argument("--parallel", type=int, default=3)
+    mutate.add_argument("--max-usd", type=float, default=5.0, help="stop verifying once this much is spent")
+    mutate.add_argument("--batch", default="verifier-mutations")
+    mutate.add_argument("--report", action="store_true", help="also write the report to evals/reports/")
     improve = commands.add_parser(
         "improve", help="the semi-automatic improvement loop (decision record 009)"
     ).add_subparsers(dest="step", required=True)
@@ -99,6 +109,22 @@ def main(argv: list[str] | None = None) -> None:
     load_env_file(REPO_ROOT / ".env")
     if args.command == "improve":
         _improve(args)
+        return
+    if args.command == "verifier-mutations":
+        from .verifier_mutations import render as render_mutations
+        from .verifier_mutations import run_mutation_suite
+
+        planning = (
+            Path(args.planning) if args.planning else sorted((REPO_ROOT / "out" / "planning").glob("*"))[-1]
+        )
+        cost = REPO_ROOT / "out" / "small" / "raw_ext" / "cost_parameter.parquet"
+        out_dir = RUNS_ROOT / args.batch
+        rows = run_mutation_suite(planning, cost, out_dir, args.per_mix, args.parallel, args.max_usd)
+        spent = json.loads((out_dir / "spent.json").read_text(encoding="utf-8"))["usd"]
+        report = render_mutations(rows, spent)
+        print(report)
+        if args.report:
+            (EVALS_ROOT / "reports" / f"{args.batch}.md").write_text(report, encoding="utf-8")
         return
     if args.command == "planner-evaluate":
         from .planner_evaluate import render as render_evaluate

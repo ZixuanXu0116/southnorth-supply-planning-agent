@@ -135,7 +135,7 @@ Compaction loses detail and breaks the cached prefix, so it is the last step, no
 2. **Spill to a file, keep a pointer** (built behind the candidate arm `main_spill`; measurement and adoption pending, change card `evals/failures/change-20261030-spill-files.md`). An output over its ceiling keeps its most useful part in the context and the full text goes to `runs/<run>/spill/`, which the agent pages by name with `read_output` (only files of its own run): the **tail** of command and log output (the result and the error are at the end), the **head** of a document or JSON (summary and definitions come first), a **preview** of a table (through `result_id`). Code: `harness/src/agent/spill.ts`; without a spill, the bridge keeps its old cut.
 3. **Hand off as the last resort** (built for case work, designed for long threads). When a session is still too long, the agent writes a handoff document (goal, task card, decisions so far, open questions, the handles it cites) and a fresh session starts from the same prefix plus that document. Case work already runs this way: every planner invocation starts fresh from the case store, whose events are the handoff. Data-agent threads record their context size per question, which decides when they need it.
 
-## 7. Sub-agents: explorer and verifier (designed, not built)
+## 7. Sub-agents: explorer and verifier (the planner's verifier built, off by default and being measured; the explorer designed)
 
 Used only when it pays: a hard question where accuracy matters and the stakes are high, or a long task. Never by default, because each one costs a full model run in money and time.
 
@@ -146,6 +146,14 @@ Used only when it pays: a hard question where accuracy matters and the stakes ar
 | Returns | A structured report: tables with grain and keys, join paths with evidence queries, caveats, confidence | `pass`, `fail`, or `uncertain`, with the discrepancies and the evidence |
 
 Each sub-agent gets its own clean context; several run in parallel when a task splits (one per sub-question or per claim), and their reports are fed back to the main agent, which owns the answer. Depth is one (a sub-agent cannot start another), the number per run is capped, each has its own budget and read-only tools, and deterministic checks (fan-out, reconciliation, coverage) always run first. The verifier is to be measured by mutation testing (dropped filters, fan-out joins, wrong windows): it must catch at least 80 % with at most 10 % false alarms.
+
+**The planner's verifier, as built** (`harness/src/agent/verifier.ts`, prompt `prompts/verifier/v1.md`; `--verify triggered|always` on the planner's CLI, off by default):
+
+1. **Trigger.** Before `propose_recommendation` is written, the harness reads the case and purchasing's ranking itself (calls that never enter the planner's transcript) and starts the verifier only if the recommendation departs from purchasing's order, the recommended option misses its service target, or the case's value is at or above a threshold.
+2. **Deterministic check first.** Every number and date of the rationale is matched against the evaluations and the case facts (up to rounding and percent); the ones found nowhere are listed for the verifier.
+3. **Independent judgment.** The verifier, on the strong model tier, gets the facts, the ranked evaluations, the recommendation, and that list, never the planner's reasoning, and calls `submit_verdict` once: pass, fail, or uncertain, with each discrepancy and the contradicting figure.
+4. **Effect.** A fail refuses the write like any other refused write: the planner corrects it once, and after a second refusal records the blocker for purchasing with `add_note`. Pass and uncertain let the write through; every report is in the run's result and trace, and its cost counts in the run's.
+5. **Measurement.** `snm-evals verifier-mutations`: the planner writes real recommendations on the planner-evaluate cases, and the verifier checks them and copies with one planted defect each (a shifted figure, a false "inside the mandate", a false "lowest cost", a false "meets the service target", a missed mandate field left unsaid). Catch rate on the mutations, false alarms on the originals.
 
 ## 8. Intake agent: a careful messenger (case-server side built, agent next)
 
@@ -173,5 +181,5 @@ Built: the case server's intake profile, bound to one case: `get_request`, `reco
 ## 11. Status
 
 - **Built:** the engine (stock-out risk per option), the case store and case server, the purchasing and supplier pages, the planner agent, the data agent with follow-up questions, governance, and evaluation.
-- **In progress:** the intake agent (case-server side built; runner, prompt, supplier simulator, and gates per decision record 008); the improvement loop (decision record 009); spill files (built behind a candidate arm, to be measured).
-- **Planned:** questions inside a case thread for purchasing and for suppliers; the explorer and verifier; handoff documents for long threads; a `purchasing` identity so the planner can query data; a scheduled job that syncs, publishes, and closes cases.
+- **In progress:** the intake agent (case-server side built; runner, prompt, supplier simulator, and gates per decision record 008); the improvement loop (decision record 009); spill files (built behind a candidate arm, to be measured); the planner's verifier (built, off by default, being measured).
+- **Planned:** questions inside a case thread for purchasing and for suppliers; the explorer; handoff documents for long threads; a `purchasing` identity so the planner can query data; a scheduled job that syncs, publishes, and closes cases.

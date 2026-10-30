@@ -25,6 +25,9 @@ async function main(): Promise<number> {
 			planning: { type: "string" },
 			"runs-dir": { type: "string", default: join(DEFAULT_RUNS_DIR, "cases") },
 			"prompt-version": { type: "string", default: PLANNER_PROMPT_VERSION },
+			// off, triggered (departs from purchasing's order, misses its service target, or high value), or always
+			verify: { type: "string", default: "off" },
+			"verify-value-usd": { type: "string", default: "10000" },
 			json: { type: "boolean", default: false },
 		},
 	});
@@ -35,6 +38,8 @@ async function main(): Promise<number> {
 	if (!PLANNER_PROMPT_VERSIONS.includes(promptVersion)) {
 		throw new Error(`--prompt-version must be one of ${PLANNER_PROMPT_VERSIONS.join(", ")}.`);
 	}
+	const verifyMode = values.verify;
+	if (!["off", "triggered", "always"].includes(verifyMode)) throw new Error("--verify must be off, triggered, or always.");
 	const config = loadConfigFromEnv();
 	const result = await runCaseTask({
 		caseId: values.case,
@@ -46,6 +51,15 @@ async function main(): Promise<number> {
 		apiKey: readApiKey(),
 		runsDir: values["runs-dir"],
 		promptVersion,
+		...(verifyMode === "off"
+			? {}
+			: {
+					verify: {
+						model: config.models.verifier,
+						mode: verifyMode as "triggered" | "always",
+						valueThresholdUsd: Number(values["verify-value-usd"]),
+					},
+				}),
 		...(values.store ? { storeDir: values.store } : {}),
 		...(values.planning ? { planningDir: values.planning } : {}),
 	});

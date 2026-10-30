@@ -23,6 +23,16 @@ import { buildManifest, type RunManifest } from "./manifest.js";
 import { renderPrompt } from "./prompts.js";
 import { increment, newRunId, payloadOf, textOf, thinkingOf, type UsageTotals } from "./runner.js";
 import { clip, TraceWriter } from "./trace.js";
+import {
+	buildPacket,
+	caseFacts,
+	type Ranking,
+	type Recommendation,
+	refusalMessage,
+	runVerifier,
+	triggersFor,
+	type VerificationReport,
+} from "./verifier.js";
 
 export type PlannerTask = "prepare" | "evaluate" | "handoff";
 export const PLANNER_PROMPT_VERSION = "v5";
@@ -96,6 +106,15 @@ export interface PlannerRunOptions {
 	runId?: string;
 	/** Prompt version to run; default PLANNER_PROMPT_VERSION. */
 	promptVersion?: PlannerPromptVersion;
+	/** Verify a recommendation before it is written (docs/TECHNICAL.md §7); off unless given. */
+	verify?: {
+		model: ModelRole;
+		mode: "triggered" | "always";
+		/** A case at or above this value always gets the verifier. */
+		valueThresholdUsd: number;
+		streamFn?: StreamFn;
+		resolvedModel?: Model<Api>;
+	};
 	storeDir?: string;
 	planningDir?: string;
 	/** Test hooks. */
@@ -112,6 +131,8 @@ export interface PlannerResult {
 	status: "written" | "no_write" | "budget_exhausted" | "error";
 	written?: { tool: string; event: Record<string, unknown> };
 	refused_writes: { tool: string; error: string }[];
+	/** One report per propose_recommendation the verifier saw (skipped ones included). */
+	verifications?: VerificationReport[];
 	final_text?: string;
 	error?: string;
 	model: string;
@@ -144,6 +165,7 @@ export async function runCaseTask(options: PlannerRunOptions): Promise<PlannerRe
 	const toolCalls: Record<string, number> = {};
 	const toolErrors: Record<string, number> = {};
 	const refused: { tool: string; error: string }[] = [];
+	const verifications: VerificationReport[] = [];
 	let written: PlannerResult["written"];
 	let turns = 0;
 	let lastText = "";
@@ -157,6 +179,7 @@ export async function runCaseTask(options: PlannerRunOptions): Promise<PlannerRe
 		status,
 		...(written ? { written } : {}),
 		refused_writes: refused,
+		...(options.verify ? { verifications } : {}),
 		...(lastText ? { final_text: lastText } : {}),
 		...(error ? { error } : {}),
 		model: `${options.model.provider}/${options.model.modelId}`,
@@ -191,6 +214,48 @@ export async function runCaseTask(options: PlannerRunOptions): Promise<PlannerRe
 		const allowed = new Set<string>([...profile.readTools, ...writeTools]);
 		const caseTools = bridge.tools.filter((tool) => allowed.has(tool.name));
 		const tools: AgentTool[] = [...createKbTools(), ...(caseTools as AgentTool[])];
+		const connected = bridge;
+		// Reads the case for the verifier; these calls never enter the planner's transcript.
+		const read = async (name: string): Promise<Record<string, unknown>> => {
+			const tool = connected.tools.find((candidate) => candidate.name === name);
+			if (!tool) throw new Error(`The case server has no ${name}.`);
+			return payloadOf(await tool.execute(`verifier-${name}`, { case_id: options.caseId })) ?? {};
+		};
+		const verify = async (recommendation: Recommendation): Promise<VerificationReport> => {
+			const settings = options.verify;
+			if (!settings) return { status: "skipped", triggered_by: [], untraced_figures: [] };
+			try {
+				const facts = caseFacts(await read("get_case"));
+				const ranking = (await read("rank_options")) as unknown as Ranking;
+				const triggered = triggersFor(recommendation, ranking, facts, {
+					valueThresholdUsd: settings.valueThresholdUsd,
+					always: settings.mode === "always",
+				});
+				const packet = buildPacket(facts, ranking, recommendation);
+				if (triggered.length === 0) {
+					return { status: "skipped", triggered_by: [], untraced_figures: packet.untraced_figures };
+				}
+				const run = await runVerifier(packet, {
+					model: settings.model,
+					apiKey: options.apiKey,
+					...(settings.streamFn ? { streamFn: settings.streamFn } : {}),
+					...(settings.resolvedModel ? { resolvedModel: settings.resolvedModel } : {}),
+				});
+				for (const key of ["input", "output", "cache_read", "cache_write", "cost_usd"] as const) usage[key] += run.usage[key];
+				return {
+					status: run.verdict ? "verified" : "error",
+					triggered_by: triggered,
+					untraced_figures: packet.untraced_figures,
+					...(run.verdict ? { verdict: run.verdict } : {}),
+					usage: run.usage,
+					turns: run.turns,
+					...(run.error ? { error: run.error } : {}),
+				};
+			} catch (error) {
+				const message = error instanceof Error ? error.message : String(error);
+				return { status: "error", triggered_by: [], untraced_figures: [], error: message };
+			}
+		};
 		const model = options.resolvedModel ?? resolveModel(options.model);
 		trace.write("run_start", {
 			run_id: runId,
@@ -212,6 +277,16 @@ export async function runCaseTask(options: PlannerRunOptions): Promise<PlannerRe
 				if (written) return { block: true, reason: "The case event for this task is written; stop now." };
 				if (writeTools.has(toolCall.name) && refused.length >= 2) {
 					return { block: true, reason: "Two writes were refused; record the blocker with add_note." };
+				}
+				if (
+					options.verify &&
+					toolCall.name === "propose_recommendation" &&
+					verifications.length < options.budgets.maxSubAgentsPerRun
+				) {
+					const report = await verify(toolCall.arguments as unknown as Recommendation);
+					verifications.push(report);
+					trace.write("verification", { ...report });
+					if (report.verdict?.verdict === "fail") return { block: true, reason: refusalMessage(report.verdict) };
 				}
 				return undefined;
 			},

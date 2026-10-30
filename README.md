@@ -77,7 +77,7 @@ flowchart TB
 - **Memory:** sessions are short, cases remember in an append-only event store, and knowledge changes only through reviewed failure cards; agents never write their own memory.
 - **Loop:** the harness, on PI's agent core, owns budgets, one terminal write, a faithfulness gate on every number, and one repair prompt.
 - **Compaction last:** small outputs at the source, overflow to files with a pointer, a handoff document only as the last resort.
-- **Sub-agents on demand:** an explorer and a verifier, in parallel, each with its own context, only for hard, high-stakes work.
+- **Sub-agents on demand:** a verifier checks a planner recommendation in its own context, only when it departs from purchasing's order, misses its service target, or is high value (built, being measured); an explorer for unfamiliar data is designed.
 - **Isolation:** TypeScript harness; Python tools over MCP in separate processes, each with only its own credentials; no agent can run code or write data outside the case store.
 
 Technical details: [`docs/TECHNICAL.md`](docs/TECHNICAL.md).
@@ -99,8 +99,8 @@ The planner buttons also need Node 22 (`npm ci && npm run build -w harness`) and
 ## Status (2026-10-29)
 
 - **Built:** engine, case store, purchasing and supplier pages, planner agent, data agent, governance, evaluation; runs locally and on Databricks Free Edition.
-- **In progress:** the intake agent (its case-server side is built); an improvement loop that turns failures into reviewed fixes; spill files for oversized outputs (built, being measured).
-- **Planned:** questions inside a case thread for purchasing and suppliers; explorer and verifier; handoff documents for long threads.
+- **In progress:** the intake agent (its case-server side is built); an improvement loop that turns failures into reviewed fixes; spill files for oversized outputs and the planner's verifier (both built, being measured).
+- **Planned:** questions inside a case thread for purchasing and suppliers; explorer; handoff documents for long threads.
 
 ## How this was built
 
