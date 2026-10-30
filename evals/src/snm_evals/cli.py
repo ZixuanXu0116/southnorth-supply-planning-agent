@@ -70,9 +70,36 @@ def main(argv: list[str] | None = None) -> None:
     evaluate.add_argument("--parallel", type=int, default=3)
     evaluate.add_argument("--batch", default="planner-evaluate")
     evaluate.add_argument("--report", action="store_true", help="also write the report to evals/reports/")
+    improve = commands.add_parser(
+        "improve", help="the semi-automatic improvement loop (decision record 009)"
+    ).add_subparsers(dest="step", required=True)
+    collect = improve.add_parser("collect", help="draft failure cards for a batch's failures")
+    collect.add_argument("--suite", required=True)
+    collect.add_argument("--batch", required=True, help="local under runs/evals/, else fetched from MLflow")
+    collect.add_argument("--at", help="replay: read the suite, answers, and knowledge base as of this commit")
+    propose = improve.add_parser("propose", help="propose a fix for a card and run the guards")
+    propose.add_argument("card")
+    propose.add_argument(
+        "--proposal", type=Path, help="a hand-written proposal (JSON) instead of the proposer"
+    )
+    screen = improve.add_parser("screen", help="screen a guarded proposal and write the packet")
+    screen.add_argument("card")
+    screen.add_argument(
+        "--max-usd", type=float, default=4.0, help="the screen's cap (owner's approval above)"
+    )
+    screen.add_argument("--parallel", type=int, default=3)
+    decide = improve.add_parser("decide", help="record the owner's decision on a card")
+    decide.add_argument("card")
+    decide.add_argument("decision", choices=["adopt", "reject", "wontfix", "iterate"])
+    decide.add_argument("--note", default="", help="the owner's reason or, for iterate, what to change")
+    intake = improve.add_parser("intake", help="cards from flagged answers of the question page")
+    intake.add_argument("path", type=Path, help="runs/ask/flags.jsonl or a downloaded thread JSON")
     args = parser.parse_args(argv)
 
     load_env_file(REPO_ROOT / ".env")
+    if args.command == "improve":
+        _improve(args)
+        return
     if args.command == "planner-evaluate":
         from .planner_evaluate import render as render_evaluate
         from .planner_evaluate import run_evaluate_suite
@@ -158,6 +185,50 @@ def main(argv: list[str] | None = None) -> None:
         experiment = args.experiment or default_experiment()
         for name in args.batch:
             upload_batch(RUNS_ROOT / name, experiment, replace=args.replace)
+
+
+def _improve(args: argparse.Namespace) -> None:
+    from .improve import loop
+    from .improve.intake import intake_flags
+
+    if args.step == "collect":
+        ids, skipped = loop.collect_cards(args.suite, args.batch, at=args.at)
+        for card_id in ids:
+            print(f"card {card_id}: runs/improve/{card_id}/card.md")
+        for case_id, reason in skipped:
+            print(f"skipped {case_id}: {reason}")
+    elif args.step == "propose":
+        outcome = loop.propose(args.card, args.proposal)
+        proposal, report = outcome["proposal"], outcome["guards"]
+        print(f"{args.card}: {proposal.get('root_cause')} -> {proposal.get('layer')}; guards ok={report.ok}")
+        for problem in report.problems:
+            print(f"  problem: {problem}")
+    elif args.step == "screen":
+        build_harness()
+        state = loop.load_state(args.card)
+        suite, _ = loop.suite_at(
+            state["suite"], state.get("at"), loop.IMPROVE_ROOT / ".work" / state["batch"]
+        )
+        settings = DatabricksSettings.from_env()
+        snapshot = verify_loaded_snapshot(suite.data_snapshot, settings)
+        backend = DatabricksBackend(settings)
+        try:
+            packet = loop.screen(
+                args.card,
+                max_usd=args.max_usd,
+                parallel=args.parallel,
+                backend=backend,
+                data_snapshot=snapshot,
+            )
+        finally:
+            backend.close()
+        print(Path(packet).read_text(encoding="utf-8"))
+    elif args.step == "decide":
+        for path in loop.decide(args.card, args.decision, args.note):
+            print(f"wrote {path}")
+    elif args.step == "intake":
+        for card_id in intake_flags(args.path):
+            print(f"card {card_id}: runs/improve/{card_id}/card.md (needs a regression case)")
 
 
 if __name__ == "__main__":

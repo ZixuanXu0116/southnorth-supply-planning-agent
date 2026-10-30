@@ -33,6 +33,7 @@ import { collectQueries, type QueryRecord } from "./queries.js";
 import { buildManifest, type DataSnapshot, type RunManifest } from "./manifest.js";
 import { type RenderedPrompt, renderPrompt } from "./prompts.js";
 import { roleDescription } from "./roles.js";
+import { createReadOutputTool, SpillStore } from "./spill.js";
 import { createTaskCardTool, type TaskCard, type TaskCardState } from "./task-card.js";
 import { clip, type RequestSettings, requestSettings, TraceWriter } from "./trace.js";
 
@@ -51,6 +52,8 @@ interface ArmConfig {
 	dataTools?: ReadonlySet<string>;
 	excludedTools?: ReadonlySet<string>;
 	metadata: "full" | "bare";
+	/** Oversized tool outputs go to spill files in the run directory, paged with `read_output` (TECHNICAL.md §6). */
+	spillFiles?: boolean;
 }
 
 const BASELINE_DATA_TOOLS: ReadonlySet<string> = new Set(["list_tables", "describe_table", "run_sql"]);
@@ -74,6 +77,8 @@ const BASELINE = {
 } as const;
 export const ARMS = {
 	main: { ...MAIN, metadata: "full" },
+	/** Candidate: `main` with spill files (change card evals/failures/change-20261030-spill-files.md). */
+	main_spill: { ...MAIN, metadata: "full", spillFiles: true },
 	main_v2: { ...MAIN, promptVersion: "v2", excludedTools: METRIC_TOOLS, metadata: "full" },
 	main_v1: {
 		prompt: "main",
@@ -321,11 +326,13 @@ export async function runQuestion(options: RunOptions): Promise<RunResult> {
 		...(earlier.length ? { earlier, context: context() } : {}),
 	});
 
+	const spill = arm.spillFiles ? new SpillStore(join(runDir, "spill")) : undefined;
 	let bridge: McpToolBridge | undefined;
 	try {
 		bridge = await McpToolBridge.connect(
 			options.toolServer ??
 				snmToolServerLaunch({ role: options.role, auditDir: join(runDir, "audit"), metadata: arm.metadata }),
+			spill ? { spill } : {},
 		);
 		const server = bridge.serverInfo();
 		if (server) manifest = { ...manifest, tool_server: server };
@@ -386,6 +393,7 @@ export async function runQuestion(options: RunOptions): Promise<RunResult> {
 			...(arm.knowledgeBase ? createKbTools() : []),
 			...(arm.taskCard ? [createTaskCardTool(taskCard) as unknown as AgentTool] : []),
 			...(dataTools as AgentTool[]),
+			...(spill ? [createReadOutputTool(spill) as unknown as AgentTool] : []),
 			answerTool as unknown as AgentTool,
 		];
 		const model = options.resolvedModel ?? resolveModel(options.model);

@@ -7,7 +7,16 @@ import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { type Static, Type } from "typebox";
 import { REPO_ROOT } from "../mcp/tool-server.js";
 
-export const KB_ROOT = join(REPO_ROOT, "kb");
+/**
+ * The knowledge-base root: `kb/` of this checkout, or `SNM_KB_ROOT` when an evaluation screen runs the agent on a
+ * candidate copy of the knowledge base (decision record 009). The tools, the INDEX in the prompt, and the KB digest
+ * of the run manifest all read it.
+ */
+export function kbRoot(env: NodeJS.ProcessEnv = process.env): string {
+	return env.SNM_KB_ROOT ? resolve(env.SNM_KB_ROOT) : join(REPO_ROOT, "kb");
+}
+
+export const KB_ROOT = kbRoot();
 
 const MAX_READ_CHARS = 20_000;
 const MAX_SEARCH_RESULTS = 8;

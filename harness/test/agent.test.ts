@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync } from "node:fs";
+import { cpSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -13,7 +13,7 @@ import {
 import { validateToolArguments } from "@earendil-works/pi-ai";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createAnswerTool } from "../src/agent/answer-tool.js";
-import { createKbTools, resolveKbPath, KB_ROOT } from "../src/agent/kb-tools.js";
+import { createKbTools, kbRoot, resolveKbPath, KB_ROOT } from "../src/agent/kb-tools.js";
 import { renderPrompt } from "../src/agent/prompts.js";
 import { checkFaithfulness, decimals, matchCell, rejectionMessage } from "../src/agent/faithfulness.js";
 import { directoryDigest, installedVersion } from "../src/agent/manifest.js";
@@ -47,6 +47,20 @@ describe("knowledge-base tools", () => {
 			expect(resolveKbPath(KB_ROOT, path)).toBeUndefined();
 		}
 		await expect(read!.execute("r3", { path: "../evals/answers/seed.json" })).rejects.toThrow(/kb_search/);
+	});
+
+	it("read a candidate knowledge base when SNM_KB_ROOT names one (decision record 009)", async () => {
+		expect(kbRoot({})).toBe(KB_ROOT);
+		const candidate = join(mkdtempSync(join(tmpdir(), "snm-kb-")), "kb");
+		cpSync(KB_ROOT, candidate, { recursive: true });
+		expect(kbRoot({ SNM_KB_ROOT: candidate })).toBe(candidate);
+		expect(directoryDigest(candidate)).toBe(directoryDigest(KB_ROOT));
+		const page = join(candidate, "sites", "longgang.md");
+		writeFileSync(page, `${readFileSync(page, "utf8")}\nA candidate rule.\n`);
+		expect(directoryDigest(candidate)).not.toBe(directoryDigest(KB_ROOT));
+		const [, candidateRead] = createKbTools(candidate);
+		expect(textOf(await candidateRead!.execute("r4", { path: "sites/longgang.md" }))).toContain("A candidate rule.");
+		expect(textOf(await read!.execute("r5", { path: "sites/longgang.md" }))).not.toContain("A candidate rule.");
 	});
 });
 

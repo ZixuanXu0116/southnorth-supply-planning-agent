@@ -159,15 +159,16 @@ class Suite(BaseModel):
         raise KeyError(case_id)
 
 
-def load_suite(name_or_path: str | Path) -> Suite:
+def load_suite(name_or_path: str | Path, cases_dir: Path = CASES_DIR) -> Suite:
+    """A suite by name (from ``cases_dir``) or path, with its included suites' cases."""
     path = Path(name_or_path)
     if not path.suffix:
-        path = CASES_DIR / f"{name_or_path}.yaml"
+        path = cases_dir / f"{name_or_path}.yaml"
     with path.open(encoding="utf-8") as handle:
         suite = Suite.model_validate(yaml.safe_load(handle))
     included: list[Case] = []
     for name in suite.includes:
-        other = load_suite(name)
+        other = load_suite(name, path.parent)
         if (other.as_of, other.data_snapshot) != (suite.as_of, suite.data_snapshot):
             raise ValueError(f"{suite.suite} includes {name} with a different as-of date or data snapshot")
         included.extend(other.cases)
@@ -177,9 +178,9 @@ def load_suite(name_or_path: str | Path) -> Suite:
     return suite
 
 
-def answers_path(suite: Suite) -> Path:
-    return ANSWERS_DIR / f"{suite.suite}.json"
+def answers_path(suite: Suite, answers_dir: Path = ANSWERS_DIR) -> Path:
+    return answers_dir / f"{suite.suite}.json"
 
 
-def load_answers(suite: Suite) -> dict[str, Any]:
-    return json.loads(answers_path(suite).read_text(encoding="utf-8"))
+def load_answers(suite: Suite, answers_dir: Path = ANSWERS_DIR) -> dict[str, Any]:
+    return json.loads(answers_path(suite, answers_dir).read_text(encoding="utf-8"))

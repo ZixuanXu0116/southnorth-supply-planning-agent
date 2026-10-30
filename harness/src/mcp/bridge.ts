@@ -6,6 +6,7 @@
  * - Tool failures reported by the server (`isError`) become `McpToolError`s,
  *   which PI turns into error tool results carrying the structured payload.
  * - Tools run sequentially: the tool server shares one warehouse connection.
+ * - An output over `maxResultChars` is cut; with a `spill`, the full text is saved and the model gets a pointer.
  */
 import type { AgentTool, AgentToolResult } from "@earendil-works/pi-agent-core";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -70,6 +71,13 @@ export interface McpToolDetails {
 	elapsedMs: number;
 	structured?: Record<string, unknown>;
 	truncatedChars?: number;
+	/** Name of the file the full output was saved to (with a spill). */
+	spilledTo?: string;
+}
+
+/** Saves an oversized output and returns what stays in the context (`agent/spill.ts`). */
+export interface OutputSpill {
+	spill(tool: string, text: string, maxChars: number): { output: string; name: string; omitted: number };
 }
 
 export interface McpBridgeOptions {
@@ -83,9 +91,13 @@ export interface McpBridgeOptions {
 	maxResultChars?: number;
 	/** Number of stderr lines kept for diagnostics. */
 	stderrLines?: number;
+	/** Where oversized outputs go; without it they are cut with a note. */
+	spill?: OutputSpill;
 }
 
 const DEFAULTS = { callTimeoutMs: 180_000, maxResultChars: 40_000, stderrLines: 50 };
+
+type BridgeSettings = Required<Omit<McpBridgeOptions, "expectedTools" | "spill">> & Pick<McpBridgeOptions, "spill">;
 
 function toLabel(tool: McpTool): string {
 	const title = tool.title ?? tool.annotations?.title;
@@ -115,7 +127,7 @@ export class McpToolBridge {
 		client: Client,
 		mcpTools: McpTool[],
 		stderrTail: string[],
-		options: Required<Omit<McpBridgeOptions, "expectedTools">>,
+		options: BridgeSettings,
 	) {
 		this.client = client;
 		this.stderrTail = stderrTail;
@@ -125,11 +137,12 @@ export class McpToolBridge {
 
 	/** Spawns the server, performs the MCP handshake, and lists its tools. */
 	static async connect(launch: ToolServerLaunch, options: McpBridgeOptions = {}): Promise<McpToolBridge> {
-		const settings = {
+		const settings: BridgeSettings = {
 			serverName: options.serverName ?? "snm-tools",
 			callTimeoutMs: options.callTimeoutMs ?? DEFAULTS.callTimeoutMs,
 			maxResultChars: options.maxResultChars ?? DEFAULTS.maxResultChars,
 			stderrLines: options.stderrLines ?? DEFAULTS.stderrLines,
+			...(options.spill ? { spill: options.spill } : {}),
 		};
 		const transport = new StdioClientTransport({
 			command: launch.command,
@@ -189,7 +202,7 @@ export class McpToolBridge {
 
 	private toAgentTool(
 		tool: McpTool,
-		options: Required<Omit<McpBridgeOptions, "expectedTools">>,
+		options: BridgeSettings,
 	): AgentTool<TSchema, McpToolDetails> {
 		return {
 			name: tool.name,
@@ -223,7 +236,12 @@ export class McpToolBridge {
 				};
 				if (result.structuredContent) details.structured = result.structuredContent;
 				let output = text;
-				if (output.length > options.maxResultChars) {
+				if (output.length > options.maxResultChars && options.spill) {
+					const spilled = options.spill.spill(tool.name, text, options.maxResultChars);
+					details.truncatedChars = spilled.omitted;
+					details.spilledTo = spilled.name;
+					output = spilled.output;
+				} else if (output.length > options.maxResultChars) {
 					details.truncatedChars = output.length - options.maxResultChars;
 					output = `${output.slice(0, options.maxResultChars)}\n[output truncated: ${details.truncatedChars} characters omitted]`;
 				}

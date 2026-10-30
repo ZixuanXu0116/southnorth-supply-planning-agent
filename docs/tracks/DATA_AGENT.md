@@ -45,6 +45,7 @@ The project runs as two working sessions from 2026-10-18 (the owner's decision):
 6. P1 backlog leftovers (`STATUS.md` next step 8): KB metric documents naming their metric views; the `executive` identity once metric views cover its questions (`c098`); the curated layer exposed to the agent; certification and deprecation.
 7. Cleanups: the `trade_compliance` role is still deployed although generator 0.8 removed the trade extract (`harness/src/agent/roles.ts`, `data/src/snm_data/governance.py`, the `access` lists of the raw contracts, governance tests, and its service principal in Databricks; decision record 003 kept it until the export data was gone). Removing it is a governance change with an irreversible step in Databricks; the owner decided on 2026-10-19 to leave it as it is for now (it affects nothing else). The `ops_analyst_global` role description still mentions trade-compliance classification counts; it is rendered into the prompt, so it changes with a prompt version. ~~The cache-read share in the report template~~ (done 2026-10-19). The 15 lint findings of `uv run ruff check .` are all in replenishment-track files (planning engine and oracle, the decision 002 analysis, `evals/src/snm_evals/planner.py`). A scorer backlog item: derive data-bound `must_mention` names from the reference result.
 8. **Joint feature, later (the owner, 2026-10-18): questions inside a case thread**, for purchasing and for suppliers, each within its permissions. Purchasing gets the data agent's read-only exploration under the `purchasing` principal (to be provisioned by the owner). A supplier gets quick answers about its own cases only, from a vendor-scoped view, never internal data (`PROPOSAL.md` §7.2, external-party isolation). The agent capability (tools, gate, task card, follow-up handling) belongs to this track; the case-thread surface in the web pages and the supplier scoping belong to the replenishment track. Specify it with a decision record before building.
+9. **Semi-automatic improvement loop** (the owner, 2026-10-28): failures from eval batches and flagged answers from the question page become failure cards, a proposer drafts a knowledge-base or prompt fix with its hypothesis, deterministic guards check it, a screen measures it paired against the source batch, and the owner adopts or rejects; no automatic adoption before a holdout set exists. Decision record [009](../decisions/009-semi-automatic-improvement-loop.md) proposed 2026-10-28, waiting for the owner's answers and review of `prompts/improver/v1.md`. Built on the record's recommended answers (PR #5, draft): `evals/src/snm_evals/improve/` (collect, card draft, guards, screen, packet, decide, flag intake) and the proposer profile `harness/src/agent/improver.ts` with `harness/dist/cli/improve.js`; `SNM_KB_ROOT` points the agent at a candidate knowledge base. A dry run of the deterministic steps on the c109 replay selected the manual screen's 24 cases (estimate USD 1.49, control reused). The acceptance runs (c109 and c184 replays, about USD 3) wait for the owner's answers and the Databricks warehouse, which failed to start on 2026-10-28 ("Cannot create the resource"). MLflow holds every run of `bank-v8-g080-dev-sonnet` (92 runs), so the c109 and c184 replays of its acceptance need no local `runs/`.
 
 ## How to run
 
@@ -55,6 +56,16 @@ node harness/dist/cli/ask.js --role ops_analyst_global --as-of 2026-09-21 "How m
 # a batch: run, score, report, MLflow
 uv run snm-evals run --suite bank_v8 --split dev --arm main --main-model <model id> --batch <name> --report --max-usd 10
 uv run snm-evals score --suite bank_v8 --batch <name> --report
+```
+
+The improvement loop (record 009); each card lives under `runs/improve/<card>/` until it is decided:
+
+```bash
+uv run snm-evals improve collect --suite bank_v8 --batch <batch>          # --at <commit> replays an older batch
+uv run snm-evals improve intake runs/ask/flags.jsonl                      # flagged answers from the question page
+uv run snm-evals improve propose <card>                                   # proposer (USD 0.50 cap) and guards
+uv run snm-evals improve screen <card> --max-usd 4                        # paired screen and packet.md
+uv run snm-evals improve decide <card> adopt|reject|wontfix|iterate --note "..."
 ```
 
 To try the agent in a browser on your own machine: `uv run snm-ask serve` (http://127.0.0.1:8001; setup in [`apps/ask/README.md`](../../apps/ask/README.md)).

@@ -407,3 +407,29 @@ def upload_batch(
     client.set_terminated(run_id, end_time=end_ms)
     log(f"{batch}: logged {len(traces)} traces, {len(metrics)} metrics, and the run files (run {run_id})")
     return run_id
+
+
+def download_batch(batch: str, target: Path, experiment: str) -> Path:
+    """Fetch the files of an uploaded batch (results, scores, report, every run's files) into ``target``.
+
+    The improvement loop reads a batch from here when it was run on another machine (decision record 009).
+    """
+    from mlflow import MlflowClient
+
+    if not _BATCH_NAME.match(batch):
+        raise ValueError(f"unsupported batch name {batch!r}")
+    client = MlflowClient()
+    found = client.get_experiment_by_name(experiment)
+    if found is None:
+        raise ValueError(f"no MLflow experiment {experiment}")
+    runs = _all_pages(
+        lambda token: client.search_runs(
+            [found.experiment_id], f"tags.`{BATCH_TAG}` = '{batch}'", page_token=token
+        )
+    )
+    complete = [run for run in runs if run.data.tags.get(UPLOAD_TAG) == "complete"]
+    if not complete:
+        raise ValueError(f"{batch}: no complete upload in {experiment}")
+    target.mkdir(parents=True, exist_ok=True)
+    client.download_artifacts(complete[0].info.run_id, "", str(target))
+    return target

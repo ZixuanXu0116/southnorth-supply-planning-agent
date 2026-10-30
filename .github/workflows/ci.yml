@@ -1,0 +1,36 @@
+# Unit, red-team, and scripted agent-loop tests. No secrets: the live Databricks tests skip without
+# role credentials, and no test calls the Anthropic API.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install
+        run: |
+          uv sync --frozen
+          npm ci
+      - name: Lint (packages and tests; evals/analysis holds one-off scripts)
+        run: uv run --frozen ruff check apps case_server data evals/src evals/tests tool_server
+      - name: Python tests
+        run: uv run --frozen pytest
+      - name: TypeScript typecheck and tests
+        run: |
+          npm run typecheck
+          npm test

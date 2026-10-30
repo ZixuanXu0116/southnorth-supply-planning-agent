@@ -28,9 +28,10 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 HARNESS = REPO_ROOT / "harness"
 CLI = HARNESS / "dist" / "cli" / "ask.js"
 RUNS_ROOT = REPO_ROOT / "runs" / "evals"
-ARMS = ("main", "main_v2", "main_v1", "baseline", "main_bare", "baseline_bare")
+ARMS = ("main", "main_spill", "main_v2", "main_v1", "baseline", "main_bare", "baseline_bare")
 # Comparisons reported when both arms are present: (treatment, control, what the difference measures).
 COMPARISONS = (
+    ("main_spill", "main", "spill files for oversized tool outputs (candidate)"),
     ("main", "main_v2", "governed metric views and query_metric (prompt v4 vs v2)"),
     ("main_v2", "main_v1", "task card + numeric faithfulness gate (prompt v2 vs v1)"),
     ("main", "baseline_bare", "full stack vs naive (knowledge base, prompt, and metadata documentation)"),
@@ -177,8 +178,9 @@ def run_batch(
     return batch_dir
 
 
-def score_batch(suite: Suite, batch_dir: Path) -> list[CaseScore]:
-    answers = load_answers(suite)
+def score_batch(suite: Suite, batch_dir: Path, answers: dict[str, Any] | None = None) -> list[CaseScore]:
+    """Score every run of the batch; ``answers`` defaults to the suite's stored reference answers."""
+    answers = answers if answers is not None else load_answers(suite)
     if answers["data_snapshot"] != suite.data_snapshot:
         raise ValueError("reference answers were computed for a different data snapshot")
     scores = []

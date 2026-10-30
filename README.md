@@ -97,8 +97,8 @@ The planner buttons also need Node 22 (`npm ci && npm run build -w harness`) and
 ## Status (2026-10-29)
 
 - **Built:** engine, case store, purchasing and supplier pages, planner agent, data agent, governance, evaluation; runs locally and on Databricks Free Edition.
-- **In progress:** the intake agent (its case-server side is built); an improvement loop that turns failures into reviewed fixes.
-- **Planned:** questions inside a case thread for purchasing and suppliers; explorer and verifier; spill files and handoff documents for long threads.
+- **In progress:** the intake agent (its case-server side is built); an improvement loop that turns failures into reviewed fixes; spill files for oversized outputs (built, being measured).
+- **Planned:** questions inside a case thread for purchasing and suppliers; explorer and verifier; handoff documents for long threads.
 
 ## How this was built
 

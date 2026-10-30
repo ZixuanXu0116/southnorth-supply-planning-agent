@@ -112,7 +112,7 @@ The API caches a prefix byte for byte, in the order tools, system prompt, messag
 | Knowledge | `kb/`, prompts, decision records | People; a change starts from a failure card and is reviewed | The index in the prefix, documents on demand |
 | Run history | Traces, results, MLflow | The harness | Not read by agents; for people and evaluation |
 
-Agents never write their own long-term memory: they cannot edit the knowledge base or their prompts. A lesson becomes memory only through a failure card and a reviewed, measured change, so every behavior change is traceable and supplier text cannot plant instructions. In progress: a semi-automatic improvement loop (decision record 009, proposed, on a working branch) that collects failures, drafts the card and the smallest fix, and leaves the decision to the owner.
+Agents never write their own long-term memory: they cannot edit the knowledge base or their prompts. A lesson becomes memory only through a failure card and a reviewed, measured change, so every behavior change is traceable and supplier text cannot plant instructions. In progress: a semi-automatic improvement loop (decision record 009, proposed; its deterministic steps and the improver profile are in `evals/src/snm_evals/improve/` and `harness/src/agent/improver.ts`) that collects failures, drafts the card and the smallest fix, and leaves the decision to the owner.
 
 ## 5. The agent loop
 
@@ -132,7 +132,7 @@ Built on PI's agent core (`@earendil-works/pi-agent-core`), with the harness own
 Compaction loses detail and breaks the cached prefix, so it is the last step, not the first:
 
 1. **Small at the source** (built). Tables come back as a preview, column stats, and a `result_id`; knowledge-base reads are capped; every tool output has a ceiling.
-2. **Spill to a file, keep a pointer** (designed). An output over its ceiling keeps its most useful part in the context and the full text goes to a file in the run directory, which the agent can page by reference: the **tail** of command and log output (the result and the error are at the end), the **head** of a document (summary and definitions come first), a **preview** of a table (built, through `result_id`). Today the generic ceiling keeps the head with a marker, which suits the JSON our tools return, and does not yet save the rest.
+2. **Spill to a file, keep a pointer** (built behind the candidate arm `main_spill`; measurement and adoption pending, change card `evals/failures/change-20261030-spill-files.md`). An output over its ceiling keeps its most useful part in the context and the full text goes to `runs/<run>/spill/`, which the agent pages by name with `read_output` (only files of its own run): the **tail** of command and log output (the result and the error are at the end), the **head** of a document or JSON (summary and definitions come first), a **preview** of a table (through `result_id`). Code: `harness/src/agent/spill.ts`; without a spill, the bridge keeps its old cut.
 3. **Hand off as the last resort** (built for case work, designed for long threads). When a session is still too long, the agent writes a handoff document (goal, task card, decisions so far, open questions, the handles it cites) and a fresh session starts from the same prefix plus that document. Case work already runs this way: every planner invocation starts fresh from the case store, whose events are the handoff. Data-agent threads record their context size per question, which decides when they need it.
 
 ## 7. Sub-agents: explorer and verifier (designed, not built)
@@ -173,5 +173,5 @@ Built: the case server's intake profile, bound to one case: `get_request`, `reco
 ## 11. Status
 
 - **Built:** the engine (stock-out risk per option), the case store and case server, the purchasing and supplier pages, the planner agent, the data agent with follow-up questions, governance, and evaluation.
-- **In progress:** the intake agent (case-server side built; runner, prompt, supplier simulator, and gates per decision record 008); the improvement loop (decision record 009).
-- **Planned:** questions inside a case thread for purchasing and for suppliers; the explorer and verifier; spill files and handoff documents for long threads; a `purchasing` identity so the planner can query data; a scheduled job that syncs, publishes, and closes cases.
+- **In progress:** the intake agent (case-server side built; runner, prompt, supplier simulator, and gates per decision record 008); the improvement loop (decision record 009); spill files (built behind a candidate arm, to be measured).
+- **Planned:** questions inside a case thread for purchasing and for suppliers; the explorer and verifier; handoff documents for long threads; a `purchasing` identity so the planner can query data; a scheduled job that syncs, publishes, and closes cases.

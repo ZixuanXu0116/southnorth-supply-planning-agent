@@ -53,6 +53,15 @@ export const DEFAULT_BUDGETS: Budget = {
 	maxSubAgentsPerRun: 3,
 };
 
+/** Budgets of the improvement loop's proposer (decision record 009): no SQL, no sub-agents, USD 0.50 per card. */
+export const IMPROVER_BUDGETS: Budget = {
+	maxTurns: 20,
+	maxUsdPerRun: 0.5,
+	maxWallClockSeconds: 300,
+	maxSqlStatements: 1,
+	maxSubAgentsPerRun: 0,
+};
+
 /** Environment variables that select the model for each agent role. */
 export const MODEL_ENV_VARS = {
 	main: { model: "SNM_MODEL_MAIN", effort: "SNM_EFFORT_MAIN", defaultEffort: "medium" },
@@ -77,6 +86,20 @@ function readRole(env: Env, role: keyof typeof MODEL_ENV_VARS): ModelRole {
 		modelId,
 		effort: (env[spec.effort]?.trim() || spec.defaultEffort) as Effort,
 	};
+}
+
+/**
+ * The improvement loop's proposer (decision record 009): `SNM_MODEL_IMPROVER`, else the verifier's model (the
+ * strong tier); effort `SNM_EFFORT_IMPROVER`, else medium.
+ */
+export function readImproverModel(env: Env = process.env): ModelRole {
+	const modelId = env.SNM_MODEL_IMPROVER?.trim() || env.SNM_MODEL_VERIFIER?.trim();
+	if (!modelId) {
+		throw new ConfigError("Missing environment variable SNM_MODEL_IMPROVER or SNM_MODEL_VERIFIER (model ID for the improver).");
+	}
+	const effort = env.SNM_EFFORT_IMPROVER?.trim() || "medium";
+	if (!Value.Check(EffortSchema, effort)) throw new ConfigError(`SNM_EFFORT_IMPROVER is not an effort level: ${effort}.`);
+	return { provider: env.SNM_MODEL_PROVIDER?.trim() || "anthropic", modelId, effort };
 }
 
 /**
