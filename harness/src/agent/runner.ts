@@ -32,6 +32,7 @@ import { createKbTools, KB_ROOT } from "./kb-tools.js";
 import { collectQueries, type QueryRecord } from "./queries.js";
 import { buildManifest, type DataSnapshot, type RunManifest } from "./manifest.js";
 import { type RenderedPrompt, renderPrompt } from "./prompts.js";
+import { handoffDocument } from "./handoff.js";
 import { roleDescription } from "./roles.js";
 import { createReadOutputTool, SpillStore } from "./spill.js";
 import { createTaskCardTool, type TaskCard, type TaskCardState } from "./task-card.js";
@@ -76,8 +77,9 @@ const BASELINE = {
 	dataTools: BASELINE_DATA_TOOLS,
 } as const;
 export const ARMS = {
-	main: { ...MAIN, metadata: "full" },
-	/** Candidate: `main` with spill files (change card evals/failures/change-20261030-spill-files.md). */
+	/** Spill files adopted 2026-10-30 (change card evals/failures/change-20261030-spill-files.md). */
+	main: { ...MAIN, metadata: "full", spillFiles: true },
+	/** The candidate arm of that change card, kept so its reports can be rerun; now the same as `main`. */
 	main_spill: { ...MAIN, metadata: "full", spillFiles: true },
 	main_v2: { ...MAIN, promptVersion: "v2", excludedTools: METRIC_TOOLS, metadata: "full" },
 	main_v1: {
@@ -203,6 +205,8 @@ export interface RunResult {
 	earlier?: EarlierQuestionResult[];
 	/** Context size of the last question. */
 	context?: ContextTelemetry;
+	/** Fresh sessions started from a handoff document within the thread. */
+	handoffs?: number;
 }
 
 export function newRunId(): string {
@@ -281,6 +285,7 @@ export async function runQuestion(options: RunOptions): Promise<RunResult> {
 	let faithfulness: FaithfulnessReport | undefined;
 	let submissions = 0;
 	let rejections = 0;
+	let handoffs = 0;
 	// Per-question state of a follow-up thread: counters at the question's start and its context telemetry.
 	const earlier: EarlierQuestionResult[] = [];
 	const atStart = { turns: 0, sql: 0, cost: 0, rejections: 0 };
@@ -324,6 +329,7 @@ export async function runQuestion(options: RunOptions): Promise<RunResult> {
 		wall_clock_s: Math.round((Date.now() - started) / 100) / 10,
 		trace_path: trace.path,
 		...(earlier.length ? { earlier, context: context() } : {}),
+		...(handoffs ? { handoffs } : {}),
 	});
 
 	const spill = arm.spillFiles ? new SpillStore(join(runDir, "spill")) : undefined;
@@ -420,92 +426,98 @@ export async function runQuestion(options: RunOptions): Promise<RunResult> {
 			manifest,
 		});
 
-		const agent = new Agent({
-			streamFn: options.streamFn ?? streamSimple,
-			getApiKey: () => options.apiKey,
-			sessionId: runId,
-			initialState: { systemPrompt: prompt.text, model, thinkingLevel: options.model.effort, tools },
-			// Read-only: records the model settings of every request as sent; the payload is not changed.
-			onPayload: (payload) => {
-				requests += 1;
-				const settings = requestSettings(payload);
-				firstRequest ??= settings;
-				trace.write("request", { call: requests, ...settings });
-				return undefined;
-			},
-			beforeToolCall: async ({ toolCall }) => {
-				if (submitted) return { block: true, reason: "An answer was already submitted; stop calling tools." };
-				if (SQL_TOOLS.has(toolCall.name)) {
-					if (sqlStatements - atStart.sql >= options.budgets.maxSqlStatements) {
-						budgetReason ??= "sql_statements";
-						return {
-							block: true,
-							reason: `SQL budget of ${options.budgets.maxSqlStatements} statements is exhausted. Submit your answer now.`,
-						};
+		// One session per handoff segment: the same frozen prompt and tools every time (handoff.ts).
+		const makeAgent = (): Agent => {
+			const created = new Agent({
+				streamFn: options.streamFn ?? streamSimple,
+				getApiKey: () => options.apiKey,
+				sessionId: runId,
+				initialState: { systemPrompt: prompt.text, model, thinkingLevel: options.model.effort, tools },
+				// Read-only: records the model settings of every request as sent; the payload is not changed.
+				onPayload: (payload) => {
+					requests += 1;
+					const settings = requestSettings(payload);
+					firstRequest ??= settings;
+					trace.write("request", { call: requests, ...settings });
+					return undefined;
+				},
+				beforeToolCall: async ({ toolCall }) => {
+					if (submitted) return { block: true, reason: "An answer was already submitted; stop calling tools." };
+					if (SQL_TOOLS.has(toolCall.name)) {
+						if (sqlStatements - atStart.sql >= options.budgets.maxSqlStatements) {
+							budgetReason ??= "sql_statements";
+							return {
+								block: true,
+								reason: `SQL budget of ${options.budgets.maxSqlStatements} statements is exhausted. Submit your answer now.`,
+							};
+						}
+						sqlStatements += 1;
 					}
-					sqlStatements += 1;
+					return undefined;
+				},
+				finishTurn: () => {
+					if (submitted) return { action: "end" };
+					if (turns - atStart.turns >= options.budgets.maxTurns) budgetReason ??= "turns";
+					if (usage.cost_usd - atStart.cost >= options.budgets.maxUsdPerRun) budgetReason ??= "usd";
+					return budgetReason && budgetReason !== "sql_statements" ? { action: "end" } : undefined;
+				},
+			});
+
+			created.subscribe((event) => {
+				if (event.type === "message_end" && event.message.role === "assistant") {
+					const message = event.message as AssistantMessage;
+					turns += 1;
+					usage.input += message.usage.input;
+					usage.output += message.usage.output;
+					usage.cache_read += message.usage.cacheRead;
+					usage.cache_write += message.usage.cacheWrite;
+					usage.cost_usd += message.usage.cost.total;
+					const promptTokens = message.usage.input + message.usage.cacheRead + message.usage.cacheWrite;
+					if (turns - atStart.turns === 1) promptWindow.first = promptTokens;
+					promptWindow.last = promptTokens;
+					promptWindow.promptTokens += promptTokens;
+					promptWindow.cacheRead += message.usage.cacheRead;
+					const text = textOf(message);
+					if (text) lastText = text;
+					const thinking = thinkingOf(message);
+					trace.write("assistant", {
+						turn: turns,
+						stop_reason: message.stopReason,
+						error: message.errorMessage,
+						usage: message.usage,
+						text: clip(text, 8000),
+						// Summarized thinking as returned by the API (the raw chain of thought is never exposed).
+						thinking: clip(thinking, 8000),
+						thinking_chars: thinking.length,
+						tool_calls: message.content
+							.filter((block) => block.type === "toolCall")
+							.map((block) => {
+								const call = block as { id: string; name: string; arguments: unknown };
+								return { id: call.id, name: call.name, arguments: call.arguments };
+							}),
+					});
+				} else if (event.type === "tool_execution_start") {
+					toolStarted.set(event.toolCallId, Date.now());
+				} else if (event.type === "tool_execution_end") {
+					increment(toolCalls, event.toolName);
+					if (event.isError) increment(toolErrors, event.toolName);
+					const content = (event.result?.content ?? []) as { type: string; text?: string }[];
+					const resultId = event.isError ? undefined : payloadOf(event.result)?.result_id;
+					if (typeof resultId === "string") seenResultIds.add(resultId);
+					trace.write("tool", {
+						id: event.toolCallId,
+						name: event.toolName,
+						is_error: event.isError,
+						duration_ms: Date.now() - (toolStarted.get(event.toolCallId) ?? Date.now()),
+						output: clip(content.map((block) => block.text ?? "").join("\n")),
+					});
 				}
-				return undefined;
-			},
-			finishTurn: () => {
-				if (submitted) return { action: "end" };
-				if (turns - atStart.turns >= options.budgets.maxTurns) budgetReason ??= "turns";
-				if (usage.cost_usd - atStart.cost >= options.budgets.maxUsdPerRun) budgetReason ??= "usd";
-				return budgetReason && budgetReason !== "sql_statements" ? { action: "end" } : undefined;
-			},
-		});
+			});
+			return created;
+		};
+		let agent = makeAgent();
 
-		agent.subscribe((event) => {
-			if (event.type === "message_end" && event.message.role === "assistant") {
-				const message = event.message as AssistantMessage;
-				turns += 1;
-				usage.input += message.usage.input;
-				usage.output += message.usage.output;
-				usage.cache_read += message.usage.cacheRead;
-				usage.cache_write += message.usage.cacheWrite;
-				usage.cost_usd += message.usage.cost.total;
-				const promptTokens = message.usage.input + message.usage.cacheRead + message.usage.cacheWrite;
-				if (turns - atStart.turns === 1) promptWindow.first = promptTokens;
-				promptWindow.last = promptTokens;
-				promptWindow.promptTokens += promptTokens;
-				promptWindow.cacheRead += message.usage.cacheRead;
-				const text = textOf(message);
-				if (text) lastText = text;
-				const thinking = thinkingOf(message);
-				trace.write("assistant", {
-					turn: turns,
-					stop_reason: message.stopReason,
-					error: message.errorMessage,
-					usage: message.usage,
-					text: clip(text, 8000),
-					// Summarized thinking as returned by the API (the raw chain of thought is never exposed).
-					thinking: clip(thinking, 8000),
-					thinking_chars: thinking.length,
-					tool_calls: message.content
-						.filter((block) => block.type === "toolCall")
-						.map((block) => {
-							const call = block as { id: string; name: string; arguments: unknown };
-							return { id: call.id, name: call.name, arguments: call.arguments };
-						}),
-				});
-			} else if (event.type === "tool_execution_start") {
-				toolStarted.set(event.toolCallId, Date.now());
-			} else if (event.type === "tool_execution_end") {
-				increment(toolCalls, event.toolName);
-				if (event.isError) increment(toolErrors, event.toolName);
-				const content = (event.result?.content ?? []) as { type: string; text?: string }[];
-				const resultId = event.isError ? undefined : payloadOf(event.result)?.result_id;
-				if (typeof resultId === "string") seenResultIds.add(resultId);
-				trace.write("tool", {
-					id: event.toolCallId,
-					name: event.toolName,
-					is_error: event.isError,
-					duration_ms: Date.now() - (toolStarted.get(event.toolCallId) ?? Date.now()),
-					output: clip(content.map((block) => block.text ?? "").join("\n")),
-				});
-			}
-		});
-
+		let preamble: string | undefined;
 		const ask = async (question: string): Promise<RunStatus> => {
 			const timer = setTimeout(() => {
 				budgetReason ??= "wall_clock";
@@ -513,7 +525,9 @@ export async function runQuestion(options: RunOptions): Promise<RunResult> {
 			}, options.budgets.maxWallClockSeconds * 1000);
 			let repaired = false;
 			try {
-				await agent.prompt(question);
+				const message = preamble ? `${preamble}\n${question}` : question;
+				preamble = undefined;
+				await agent.prompt(message);
 				const canRepair = () =>
 					!submitted && !agent.state.errorMessage && budgetReason !== "wall_clock" && !repaired;
 				if (canRepair()) {
@@ -552,6 +566,13 @@ export async function runQuestion(options: RunOptions): Promise<RunResult> {
 			if (status === "error") {
 				threadFailed = true;
 				break;
+			}
+			if (promptWindow.last >= options.budgets.handoffPromptTokens) {
+				handoffs += 1;
+				preamble = handoffDocument(earlier, taskCard.card);
+				writeFileSync(join(runDir, `handoff-${handoffs}.md`), preamble, "utf8");
+				trace.write("handoff", { after_question: index, prompt_tokens: promptWindow.last, chars: preamble.length });
+				agent = makeAgent();
 			}
 			Object.assign(atStart, { turns, sql: sqlStatements, cost: usage.cost_usd, rejections });
 			Object.assign(promptWindow, { first: 0, last: 0, promptTokens: 0, cacheRead: 0 });

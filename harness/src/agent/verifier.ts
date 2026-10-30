@@ -27,6 +27,7 @@ export const VERIFIER_BUDGETS: Budget = {
 	maxSqlStatements: 1,
 	maxSubAgentsPerRun: 0,
 	maxToolOutputChars: 40_000,
+	handoffPromptTokens: 150_000,
 };
 
 export interface Recommendation {
@@ -142,7 +143,25 @@ export function untracedFigures(text: string, sources: unknown[]): string[] {
 	return [...new Set(untraced)];
 }
 
-/** The case facts the verifier needs, without events, messages, or the projection. */
+/** Quoted terms of a supplier proposal that a rationale may cite (validity, surcharge, price, splits). */
+const PROPOSAL_FIELDS = [
+	"proposal_id",
+	"kind",
+	"quantity",
+	"ship_date",
+	"arrival_date",
+	"valid_until",
+	"unit_price",
+	"surcharge_pct",
+	"surcharge_amount",
+	"freight_amount",
+	"split_deliveries",
+	"conditions",
+	"within_mandate",
+] as const;
+
+/** The case facts the verifier needs (with the proposals as quoted and the service target), without events,
+ * messages, or the projection. */
 export function caseFacts(getCase: Row): Row {
 	const engine = (getCase.engine ?? {}) as Row;
 	const keep = [
@@ -162,6 +181,14 @@ export function caseFacts(getCase: Row): Row {
 	const facts: Row = { case_id: getCase.case_id, plant: getCase.plant, material: getCase.material };
 	for (const key of keep) if (engine[key] !== undefined) facts[key] = engine[key];
 	if (getCase.mandate !== undefined) facts.mandate = getCase.mandate;
+	const target = (engine.demand_model as Row | undefined)?.service_target;
+	// The service level the part must reach; its stock-out risk may be at most 1 minus this.
+	if (target !== undefined) facts.service_target = target;
+	if (Array.isArray(getCase.proposals)) {
+		facts.proposals = (getCase.proposals as Row[]).map((proposal) =>
+			Object.fromEntries(PROPOSAL_FIELDS.filter((key) => proposal[key] != null).map((key) => [key, proposal[key]])),
+		);
+	}
 	return facts;
 }
 

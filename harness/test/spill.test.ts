@@ -163,19 +163,19 @@ describe.skipIf(!hasUv)("the main_spill arm", () => {
 	});
 	afterAll(() => faux.unregister());
 
-	it("offers read_output only on the candidate arm and refuses unknown names", async () => {
+	it("offers read_output on main (adopted) but not on earlier arms, and refuses unknown names", async () => {
 		faux.setResponses([
 			fauxAssistantMessage([fauxToolCall("read_output", { name: "001-list_tables.txt" })], { stopReason: "toolUse" }),
 			fauxAssistantMessage([fauxToolCall("submit_answer", answer)], { stopReason: "toolUse" }),
 		]);
-		const spilled = await runQuestion(options("main_spill"));
+		const spilled = await runQuestion(options("main"));
 		expect(spilled.status).toBe("answered");
 		expect(spilled.tool_errors).toMatchObject({ read_output: 1 });
 		expect(toolsOf(spilled.trace_path)).toContain("read_output");
 
 		faux.setResponses([fauxAssistantMessage([fauxToolCall("submit_answer", answer)], { stopReason: "toolUse" })]);
-		const main = await runQuestion(options("main"));
-		expect(main.status).toBe("answered");
-		expect(toolsOf(main.trace_path)).not.toContain("read_output");
+		const earlier = await runQuestion(options("main_v2"));
+		expect(earlier.status).toBe("answered");
+		expect(toolsOf(earlier.trace_path)).not.toContain("read_output");
 	}, 60_000);
 });
