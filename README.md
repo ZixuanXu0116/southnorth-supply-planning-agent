@@ -1,5 +1,7 @@
 # SouthNorth Solutions — Verified Supply-Planning Agent
 
+[![CI](https://github.com/ZixuanXu0116/southnorth-supply-planning-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/ZixuanXu0116/southnorth-supply-planning-agent/actions/workflows/ci.yml)
+
 A supply-planning copilot on synthetic SAP-shaped data: a deterministic engine flags parts that will run short, AI agents prepare each case (the supplier request, options priced with their stock-out risk, a ranked recommendation), and people make every decision.
 
 > This repo mostly shows recommendations. At work I also build chat agents for purchasing and for suppliers on the same kind of semantic layer, knowledge base and harness, every answer traced and logged, to support decisions with more tailored information. I have not rebuilt that part here yet.
