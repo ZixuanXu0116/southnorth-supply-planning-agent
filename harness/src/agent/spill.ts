@@ -2,7 +2,8 @@
  * Spill files (docs/TECHNICAL.md §6, step 2): a tool output over its ceiling keeps its most useful part in the
  * context, and the full text is saved to a file in the run directory, which the agent pages by name with
  * `read_output`. JSON and documents keep their head; log-like outputs keep their tail (the result and the error
- * are at the end). Only files saved by this run can be read.
+ * are at the end). A JSON output also gets a one-line shape of the whole (its keys and the length of every list),
+ * so the agent can tell what lies past the cut before it reads on. Only files saved by this run can be read.
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -19,6 +20,48 @@ export const MAX_READ_CHARS = 20_000;
 export function keepPart(text: string, maxChars: number, keep: Keep): string {
 	if (text.length <= maxChars) return text;
 	return keep === "tail" ? text.slice(text.length - maxChars) : text.slice(0, maxChars);
+}
+
+/** Longest shape line; a wider object lists its first keys only. */
+const MAX_SHAPE_CHARS = 800;
+
+function keysOf(value: Record<string, unknown>, limit: number): string {
+	const keys = Object.keys(value);
+	const more = keys.length > limit ? `, +${keys.length - limit} more` : "";
+	return `{${keys.slice(0, limit).join(", ")}${more}}`;
+}
+
+function describe(value: unknown): string {
+	if (value === null) return "null";
+	if (typeof value === "string") return `string(${value.length})`;
+	if (Array.isArray(value)) {
+		const first = value[0];
+		if (first && typeof first === "object" && !Array.isArray(first)) {
+			return `list(${value.length}) of ${keysOf(first as Record<string, unknown>, 8)}`;
+		}
+		return value.length ? `list(${value.length}) of ${Array.isArray(first) ? "lists" : typeof first}` : "list(0)";
+	}
+	if (typeof value === "object") return keysOf(value as Record<string, unknown>, 8);
+	return typeof value;
+}
+
+/** One line naming the keys of a JSON output and the length of every list in it; undefined for other text. */
+export function jsonShape(text: string): string | undefined {
+	const start = text.trimStart()[0];
+	if (start !== "{" && start !== "[") return undefined;
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(text);
+	} catch {
+		return undefined;
+	}
+	const body = Array.isArray(parsed)
+		? describe(parsed)
+		: `{${Object.entries(parsed as Record<string, unknown>)
+				.map(([key, value]) => `${key}: ${describe(value)}`)
+				.join(", ")}}`;
+	const line = `[shape of the full output: ${body}]`;
+	return line.length <= MAX_SHAPE_CHARS ? line : `${line.slice(0, MAX_SHAPE_CHARS - 2)}…]`;
 }
 
 export interface SpillOptions {
@@ -47,12 +90,14 @@ export class SpillStore implements OutputSpill {
 		mkdirSync(this.dir, { recursive: true });
 		writeFileSync(join(this.dir, name), text, "utf8");
 		this.saved.set(name, text);
-		const kept = keepPart(text, maxChars, keep);
+		const shape = keep === "head" ? jsonShape(text) : undefined;
+		const kept = keepPart(text, Math.max(0, maxChars - (shape ? shape.length + 1 : 0)), keep);
 		const omitted = text.length - kept.length;
 		const note =
 			`[output truncated: kept the ${keep === "tail" ? "last" : "first"} ${kept.length} of ${text.length} characters; ` +
 			`the full output is saved as "${name}"; read the rest with read_output]`;
-		return { output: keep === "tail" ? `${note}\n${kept}` : `${kept}\n${note}`, name, omitted };
+		const output = keep === "tail" ? `${note}\n${kept}` : `${shape ? `${shape}\n` : ""}${kept}\n${note}`;
+		return { output, name, omitted };
 	}
 
 	read(name: string, offset = 0, limit = MAX_READ_CHARS): {

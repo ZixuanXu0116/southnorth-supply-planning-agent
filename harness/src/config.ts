@@ -28,6 +28,8 @@ export const BudgetSchema = Type.Object({
 	maxWallClockSeconds: Type.Integer({ minimum: 1 }),
 	maxSqlStatements: Type.Integer({ minimum: 1 }),
 	maxSubAgentsPerRun: Type.Integer({ minimum: 0 }),
+	/** Characters of one tool output that enter the context; the rest is cut, or spilled to a file (spill.ts). */
+	maxToolOutputChars: Type.Integer({ minimum: 1000 }),
 });
 
 export const HarnessConfigSchema = Type.Object({
@@ -51,6 +53,7 @@ export const DEFAULT_BUDGETS: Budget = {
 	maxWallClockSeconds: 300,
 	maxSqlStatements: 25,
 	maxSubAgentsPerRun: 3,
+	maxToolOutputChars: 40_000,
 };
 
 /** Budgets of the improvement loop's proposer (decision record 009): no SQL, no sub-agents, USD 0.50 per card. */
@@ -60,6 +63,7 @@ export const IMPROVER_BUDGETS: Budget = {
 	maxWallClockSeconds: 300,
 	maxSqlStatements: 1,
 	maxSubAgentsPerRun: 0,
+	maxToolOutputChars: 40_000,
 };
 
 /** Environment variables that select the model for each agent role. */
@@ -120,6 +124,9 @@ export function readApiKey(env: Env = process.env): string {
 
 /** Build and validate the harness configuration from environment variables. */
 export function loadConfigFromEnv(env: Env = process.env, budgets: Budget = DEFAULT_BUDGETS): HarnessConfig {
+	// The output ceiling may be lowered for a stress test (change card change-20261030-spill-files).
+	const ceiling = env.SNM_MAX_TOOL_OUTPUT_CHARS?.trim();
+	if (ceiling) budgets = { ...budgets, maxToolOutputChars: Number(ceiling) };
 	const config: HarnessConfig = {
 		models: {
 			main: readRole(env, "main"),

@@ -20,6 +20,12 @@ describe("loadConfigFromEnv", () => {
 		expect(config.budgets).toEqual(DEFAULT_BUDGETS);
 	});
 
+	it("lowers the tool-output ceiling only when asked, and refuses a ceiling below 1000", () => {
+		expect(loadConfigFromEnv(baseEnv).budgets.maxToolOutputChars).toBe(40_000);
+		expect(loadConfigFromEnv({ ...baseEnv, SNM_MAX_TOOL_OUTPUT_CHARS: "4000" }).budgets.maxToolOutputChars).toBe(4000);
+		expect(() => loadConfigFromEnv({ ...baseEnv, SNM_MAX_TOOL_OUTPUT_CHARS: "10" })).toThrow(ConfigError);
+	});
+
 	it("honors effort overrides", () => {
 		const config = loadConfigFromEnv({ ...baseEnv, SNM_EFFORT_MAIN: "high" });
 		expect(config.models.main.effort).toBe("high");

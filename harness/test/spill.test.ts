@@ -9,7 +9,7 @@ import {
 	registerFauxProvider,
 } from "@earendil-works/pi-ai/compat";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createReadOutputTool, keepPart, MAX_READ_CHARS, SpillStore } from "../src/agent/spill.js";
+import { createReadOutputTool, jsonShape, keepPart, MAX_READ_CHARS, SpillStore } from "../src/agent/spill.js";
 import { type RunOptions, runQuestion } from "../src/agent/runner.js";
 import { DEFAULT_BUDGETS } from "../src/config.js";
 import { McpToolBridge } from "../src/mcp/bridge.js";
@@ -35,12 +35,27 @@ describe("spill files", () => {
 		const text = JSON.stringify({ rows: Array.from({ length: 50 }, (_, index) => ({ index })) });
 		const spilled = store.spill("describe_table", text, 100);
 		expect(spilled.name).toBe("001-describe_table.txt");
-		expect(spilled.omitted).toBe(text.length - 100);
-		expect(spilled.output.startsWith(text.slice(0, 100))).toBe(true);
+		const shape = jsonShape(text) ?? "";
+		expect(shape).toBe("[shape of the full output: {rows: list(50) of {index}}]");
+		// The shape line comes first; the head fills the rest of the ceiling.
+		const kept = 100 - shape.length - 1;
+		expect(spilled.omitted).toBe(text.length - kept);
+		expect(spilled.output.startsWith(`${shape}\n${text.slice(0, kept)}\n[output truncated`)).toBe(true);
 		expect(spilled.output).toContain('saved as "001-describe_table.txt"');
 		expect(spilled.output).toContain("read_output");
 		expect(readFileSync(join(store.dir, spilled.name), "utf8")).toBe(text);
 		expect(store.spill("sample_rows", text, 100).name).toBe("002-sample_rows.txt");
+	});
+
+	it("describes the shape of JSON outputs only", () => {
+		expect(jsonShape(JSON.stringify({ role: "ops", tables: [{ table: "a", rows: 1 }], total: 2 }))).toBe(
+			"[shape of the full output: {role: string(3), tables: list(1) of {table, rows}, total: number}]",
+		);
+		expect(jsonShape(JSON.stringify([1, 2, 3]))).toBe("[shape of the full output: list(3) of number]");
+		expect(jsonShape("plain text, not JSON")).toBeUndefined();
+		expect(jsonShape('{"cut": [1, 2')).toBeUndefined();
+		const wide = Object.fromEntries(Array.from({ length: 200 }, (_, index) => [`column_${index}`, index]));
+		expect(jsonShape(JSON.stringify(wide))?.length).toBeLessThanOrEqual(800);
 	});
 
 	it("keeps the tail of tools that read like logs, with the note first", () => {
@@ -96,7 +111,9 @@ describe.skipIf(!hasUv)("spill files through the MCP bridge", () => {
 		// The structured result stays whole for the harness (the faithfulness gate reads it).
 		const full = readFileSync(join(store.dir, "001-list_tables.txt"), "utf8");
 		expect(JSON.parse(full)).toEqual(result.details.structured);
-		expect(result.details.truncatedChars).toBe(full.length - 300);
+		const shape = jsonShape(full) ?? "";
+		expect(output.startsWith(shape)).toBe(true);
+		expect(result.details.truncatedChars).toBe(full.length - (300 - shape.length - 1));
 
 		const reader = createReadOutputTool(store);
 		let assembled = "";

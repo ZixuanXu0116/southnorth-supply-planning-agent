@@ -332,7 +332,7 @@ export async function runQuestion(options: RunOptions): Promise<RunResult> {
 		bridge = await McpToolBridge.connect(
 			options.toolServer ??
 				snmToolServerLaunch({ role: options.role, auditDir: join(runDir, "audit"), metadata: arm.metadata }),
-			spill ? { spill } : {},
+			{ maxResultChars: options.budgets.maxToolOutputChars, ...(spill ? { spill } : {}) },
 		);
 		const server = bridge.serverInfo();
 		if (server) manifest = { ...manifest, tool_server: server };
