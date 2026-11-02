@@ -134,6 +134,14 @@ def main(argv: list[str] | None = None) -> None:
     decide.add_argument("--note", default="", help="the owner's reason or, for iterate, what to change")
     intake = improve.add_parser("intake", help="cards from flagged answers of the question page")
     intake.add_argument("path", type=Path, help="runs/ask/flags.jsonl or a downloaded thread JSON")
+    judge = commands.add_parser(
+        "trace-judge", help="trace soundness: a sample of planner runs graded by a judge"
+    )
+    judge.add_argument("--batches", nargs="+", required=True, help="batch directories under runs/evals/")
+    judge.add_argument("--sample", type=int, default=12)
+    judge.add_argument("--seed", type=int, default=1)
+    judge.add_argument("--batch", required=True, help="output directory under runs/evals/")
+    judge.add_argument("--report", action="store_true", help="write evals/reports/<batch>.md")
     docs = commands.add_parser("documents", help="supplier documents: code-only vs. model extractors")
     docs.add_argument("--batch", required=True)
     docs.add_argument("--arms", default="rules,claude-haiku-5-5,claude-sonnet-5-5,claude-opus-5-5")
@@ -145,6 +153,16 @@ def main(argv: list[str] | None = None) -> None:
     load_env_file(REPO_ROOT / ".env")
     if args.command == "improve":
         _improve(args)
+        return
+    if args.command == "trace-judge":
+        from .trace_judge import render as render_judgments
+        from .trace_judge import run_trace_judge
+
+        rows = run_trace_judge(args.batches, args.sample, args.seed, RUNS_ROOT / args.batch)
+        report = render_judgments(rows, args.batches, args.seed)
+        print(report)
+        if args.report:
+            (EVALS_ROOT / "reports" / f"{args.batch}.md").write_text(report, encoding="utf-8")
         return
     if args.command == "documents":
         from .documents import SET_DIR, render_documents_report, run_suite

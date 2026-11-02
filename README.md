@@ -53,7 +53,7 @@ Technical details: [`docs/TECHNICAL.md`](docs/TECHNICAL.md) · decisions: [`docs
 
   `regret = cost of the chosen option − cost of the hindsight-cheapest option`
 
-- **Trace soundness (planned).** Every run leaves a trace of its turns and tool calls. Each trace will be checked against the steps a sound solution takes (read the case before pricing it, rank before recommending, cite the server's evaluation ids, end with one write on its own), to catch a right answer reached the wrong way.
+- **Trace soundness.** Every run leaves a trace of its turns and tool calls. A sample of traces is graded by an LLM judge against the steps a sound solution takes (read the case before writing, rank before recommending, cite the server's evaluation ids, end with one write on its own), to catch a right answer reached the wrong way (`snm-evals trace-judge`).
 - **Supplier documents (field accuracy).** Documents with known answers (PDFs, screenshots, scans, the supplier's own Excel): `field accuracy = fields read correctly / fields in the document`.
 
 ## Try it locally
@@ -72,7 +72,7 @@ The agents also need Node 22 (`npm ci && npm run build -w harness`) and an Anthr
 
 ## Status (2026-11-02)
 
-- **Built:** engine, case store, purchasing and supplier pages, planner agent, supplier-document extractor, data agent, governance, evaluations, containers, Databricks App.
+- **Built:** engine, case store, purchasing and supplier pages; the planner agent with a verifier sub-agent; supplier replies read from PDFs, screenshots and Excel; the data agent; governance; evaluations (regret, trace soundness, field accuracy); one MCP server per container; deployed as a Databricks App.
 - **In progress:** the intake agent (its case-server side is built); an improvement loop that turns failures into reviewed fixes.
 - **Planned:** questions inside a case thread for purchasing and suppliers; supplier replies by email.
 
