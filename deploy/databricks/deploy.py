@@ -34,6 +34,7 @@ INCLUDE = [
     "harness/config",
     "data/pyproject.toml", "data/src", "tool_server/pyproject.toml", "tool_server/src",
     "case_server/pyproject.toml", "case_server/src", "apps/web/pyproject.toml", "apps/web/src",
+    "evals/pyproject.toml", "evals/src",
     "prompts", "kb", "data_contracts", "semantic",
 ]  # fmt: skip
 MODEL_SETTINGS = (

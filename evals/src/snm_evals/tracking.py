@@ -89,7 +89,7 @@ def trace_spans(events: list[dict[str, Any]]) -> list[SpanSpec]:
         span_type="AGENT",
         start_ns=timestamp_ns(start["ts"]),
         end_ns=timestamp_ns((end or events[-1])["ts"]),
-        inputs=_pick(start, ("question", "role", "as_of")),
+        inputs=_pick(start, ("question", "case_id", "task", "role", "as_of")),
         outputs={"status": end.get("status"), "answer": end.get("answer")} if end else None,
         attributes=_pick(start, (*_START_KEYS, "manifest")),
         error=end is None or end.get("status") == "error",
@@ -280,7 +280,10 @@ def _delete_batch(client: Any, experiment_id: str, batch: str, runs: list[Any]) 
         client.delete_run(run.info.run_id)
 
 
-def _log_trace(spans: list[SpanSpec], experiment_id: str, batch_run_id: str, tags: dict[str, str]) -> None:
+def _log_trace(
+    spans: list[SpanSpec], experiment_id: str, batch_run_id: str | None, tags: dict[str, str]
+) -> str:
+    """Log the spans as one trace; return its trace id."""
     import mlflow
     from mlflow.entities import SpanEvent, SpanStatusCode
     from mlflow.tracing.constant import TraceMetadataKey
@@ -289,11 +292,9 @@ def _log_trace(spans: list[SpanSpec], experiment_id: str, batch_run_id: str, tag
     for spec in spans:
         options: dict[str, Any] = {}
         if spec.parent is None:
-            options = {
-                "experiment_id": experiment_id,
-                "tags": tags,
-                "metadata": {TraceMetadataKey.SOURCE_RUN: batch_run_id},
-            }
+            options = {"experiment_id": experiment_id, "tags": tags}
+            if batch_run_id:
+                options["metadata"] = {TraceMetadataKey.SOURCE_RUN: batch_run_id}
         span = mlflow.start_span_no_context(
             spec.name,
             span_type=spec.span_type,
@@ -310,6 +311,61 @@ def _log_trace(spans: list[SpanSpec], experiment_id: str, batch_run_id: str, tag
     for spec in reversed(spans):
         status = SpanStatusCode.ERROR if spec.error else SpanStatusCode.OK
         live[spec.key].end(outputs=spec.outputs, status=status, end_time_ns=max(spec.end_ns, spec.start_ns))
+    root = live[spans[0].key]
+    return str(getattr(root, "trace_id", None) or getattr(root, "request_id", ""))
+
+
+def ensure_experiment(client: Any, experiment: str, artifact_location: str | None = None) -> str:
+    """The experiment's id, created (with ``artifact_location`` when given) when it does not exist yet."""
+    found = client.get_experiment_by_name(experiment)
+    if found:
+        return found.experiment_id
+    return client.create_experiment(experiment, artifact_location=artifact_location)
+
+
+def log_run(
+    trace_path: Path, experiment: str, tags: dict[str, str], artifact_location: str | None = None
+) -> str:
+    """One agent run's ``trace.jsonl`` as one MLflow trace in ``experiment`` (no batch run); its trace id.
+
+    MLflow logs a failed upload of the span data instead of raising it, so the trace is read back: a trace
+    without its spans raises, with the warnings MLflow logged while it uploaded.
+    """
+    import logging
+
+    import mlflow
+    from mlflow import MlflowClient
+
+    client = MlflowClient()
+    experiment_id = ensure_experiment(client, experiment, artifact_location)
+    spans = trace_spans(read_events(trace_path))
+    problems: list[str] = []
+
+    class Collect(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            message = record.getMessage()
+            # Keep what explains a lost upload; MLflow's notes on type hints are not about it.
+            if record.levelno >= logging.WARNING and "type hint" not in message:
+                problems.append(message[:1200])
+
+    handler = Collect()
+    logger = logging.getLogger("mlflow")
+    logger.addHandler(handler)
+    try:
+        trace_id = _log_trace(spans, experiment_id, None, tags)
+        mlflow.flush_trace_async_logging()
+    finally:
+        logger.removeHandler(handler)
+    try:
+        stored = client.get_trace(trace_id)
+        logged = len(stored.data.spans) if stored and stored.data else 0
+    except Exception as error:
+        logged, problems = 0, [*problems, f"{type(error).__name__}: {error}"[:400]]
+    if logged == 0:
+        raise RuntimeError(
+            f"trace {trace_id} has no span data: {' | '.join(problems) or 'no warning logged'}"
+        )
+    return trace_id
 
 
 def upload_batch(
@@ -339,8 +395,7 @@ def upload_batch(
     scores = {score["run_id"]: score for score in json.loads(scores_path.read_text(encoding="utf-8"))}
 
     client = MlflowClient()
-    found = client.get_experiment_by_name(experiment)
-    experiment_id = found.experiment_id if found else client.create_experiment(experiment)
+    experiment_id = ensure_experiment(client, experiment)
     existing = _all_pages(
         lambda token: client.search_runs([experiment_id], f"tags.`{BATCH_TAG}` = '{batch}'", page_token=token)
     )

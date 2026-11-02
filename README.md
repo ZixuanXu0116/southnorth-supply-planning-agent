@@ -38,8 +38,8 @@ flowchart TB
 
 **Design in brief**
 
-- **Numbers come from code, not the model.** The planner reads, compares, and explains; every figure it cites comes from a tool, and the case server refuses a write whose ids or order do not match its own evaluation.
-- **The loop is thin and visible.** A TypeScript harness on PI's agent core: a fixed prompt, a tool set chosen per task, hooks before every tool call (one write per task, alone in its turn; budgets), and a trace of every turn.
+- **Numbers come from code, not the model.** The planner reads, compares, and explains; every figure it cites comes from a tool. The harness refuses a recommendation whose figures appear in no evaluation, the case server refuses a write whose ids or order do not match its own, and a task gets two attempts before it ends with a note to purchasing.
+- **The loop is thin and visible.** A TypeScript harness on PI's agent core: a fixed prompt, a tool set chosen per task, hooks before every tool call (one write per task, alone in its turn; budgets), and a trace of every turn, in MLflow for evaluation and app runs alike.
 - **Isolation.** Python tools run as MCP servers in their own processes with only their own credentials; the model's key never reaches them. Supplier text and documents are data, never instructions.
 - **Measured change.** Every fix starts from a traced failure (a failure card), is replayed before and after, and stays as a regression test.
 

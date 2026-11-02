@@ -37,7 +37,7 @@ The planner prepare suite reads `get_case`; its cases have no clearing in their 
 
 ## Owner review
 
-- Hypothesis review (2026-11-01): the owner asked for the fix in the case server ("把这三个问题连同 trace 存进 volume 一起做").
+- Hypothesis review (2026-11-01): the owner asked for the fix in the case server ("do these three problems together with storing the traces in the volume").
 - Diff review: no prompt diff.
 
 ## Measurement

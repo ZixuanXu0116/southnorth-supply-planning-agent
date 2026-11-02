@@ -38,7 +38,7 @@ The planner suites run with today pinned to the planning run's as-of date, so th
 
 ## Owner review
 
-- Hypothesis review (2026-11-01): the owner asked for the fix ("把这三个问题连同 trace 存进 volume 一起做"). The assistant changed the proposed form (a pinned day for frozen worlds) after finding that a wall-clock shift alone would move every lever in the eval worlds.
+- Hypothesis review (2026-11-01): the owner asked for the fix ("do these three problems together with storing the traces in the volume"). The assistant changed the proposed form (a pinned day for frozen worlds) after finding that a wall-clock shift alone would move every lever in the eval worlds.
 - Diff review: no prompt diff.
 
 ## Measurement

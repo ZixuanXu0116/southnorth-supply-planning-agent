@@ -192,6 +192,16 @@
 </div>
 {% endif %}
 
+{% if planner_note %}
+<div class="card">
+  <div class="card-head">
+    <h2>Planner note</h2>
+    <span class="muted">{{ planner_note.at }} UTC{% if planner_note.run_id %} · run {{ planner_note.run_id }}{% endif %}</span>
+  </div>
+  <p class="notice">{{ planner_note.text }}</p>
+</div>
+{% endif %}
+
 {% if not is_transfer and case.state in ["new", "prepared", "sent", "responded", "recommended"] %}
 <div class="card">
   <h2>Decision</h2>

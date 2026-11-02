@@ -26,6 +26,8 @@ async function main(): Promise<number> {
 			planning: { type: "string" },
 			"runs-dir": { type: "string", default: join(DEFAULT_RUNS_DIR, "cases") },
 			"prompt-version": { type: "string", default: PLANNER_PROMPT_VERSION },
+			// on (default): a recommendation whose rationale has a figure found in no evaluation is refused
+			"figure-check": { type: "string", default: "on" },
 			// off, triggered (departs from purchasing's order, misses its service target, or high value), or always
 			verify: { type: "string", default: "off" },
 			"verify-value-usd": { type: "string", default: "10000" },
@@ -45,6 +47,7 @@ async function main(): Promise<number> {
 	if (!["off", "triggered", "always"].includes(verifyMode)) throw new Error("--verify must be off, triggered, or always.");
 	const verifyForm = values["verify-form"] as VerifyForm;
 	if (!VERIFY_FORMS.includes(verifyForm)) throw new Error(`--verify-form must be one of ${VERIFY_FORMS.join(", ")}.`);
+	if (!["on", "off"].includes(values["figure-check"])) throw new Error("--figure-check must be on or off.");
 	const config = loadConfigFromEnv();
 	const result = await runCaseTask({
 		caseId: values.case,
@@ -56,6 +59,7 @@ async function main(): Promise<number> {
 		apiKey: readApiKey(),
 		runsDir: values["runs-dir"],
 		promptVersion,
+		figureCheck: values["figure-check"] === "on",
 		...(verifyMode === "off"
 			? {}
 			: {

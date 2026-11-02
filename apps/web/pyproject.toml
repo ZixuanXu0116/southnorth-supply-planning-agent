@@ -10,6 +10,7 @@ dependencies = [
     "python-multipart>=0.0.18",
     "snm-cases",
     "snm-data",
+    "snm-evals",
     "uvicorn>=0.30",
 ]
 
@@ -26,3 +27,4 @@ packages = ["src/snm_web"]
 [tool.uv.sources]
 snm-cases = { workspace = true }
 snm-data = { workspace = true }
+snm-evals = { workspace = true }

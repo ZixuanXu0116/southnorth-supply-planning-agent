@@ -648,3 +648,27 @@ def test_confirming_a_draft_with_a_surcharge_of_none_and_a_readable_refusal():
         _confirmed_options(form, drafted)
     with pytest.raises(ValueError, match=r"offer 1: quantity: Input should be greater than 0"):
         _confirmed_options({**form, "1.surcharge_amount": "", "1.quantity": "-5"}, drafted)
+
+
+def test_a_planner_run_refused_twice_leaves_a_visible_note(tmp_path):
+    """The owner, 2026-11-02: after two refused writes the harness says why on the case; the page shows it."""
+    service = CaseService(LocalCaseStore(tmp_path / "store"), FakePlanning([case_row()]), clock=Clock())
+    service.sync_engine_run("plan-1")
+    (tmp_path / "case.js").write_text("// stand-in")
+    note = (
+        "No planner recommendation: decide from the ranked options table. The planner's write was refused "
+        "twice (UNTRACED_FIGURES, UNRANKED); its trace is run r-7."
+    )
+
+    def planner(settings, case_id, task, role, as_of):
+        service.add_note(Actor("planner_agent", "purchasing", run_id="r-7"), case_id, note)
+        return {"status": "refused", "failure_note": note, "usage": {"cost_usd": 0.03}}
+
+    settings = WebSettings(mode="local", runs_dir=tmp_path / "runs", store_dir=tmp_path / "store",
+                           planning_dir=tmp_path, harness_cli=tmp_path / "case.js")  # fmt: skip
+    client = TestClient(create_app(service, settings, planner=planner))
+    play(client, "purchasing")
+    response = client.post(f"/cases/{CASE}/planner", data={"task": "prepare"}, follow_redirects=False)
+    assert "refused twice" in urllib_unquote(response.headers["location"])
+    page = text_of(client.get(f"/cases/{CASE}").text)
+    assert "Planner note" in page and "decide from the ranked options table" in page and "run r-7" in page

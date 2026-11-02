@@ -154,7 +154,7 @@ Each sub-agent gets its own clean context; several run in parallel when a task s
 1. **Trigger.** Before `propose_recommendation` is written, the harness reads the case and purchasing's ranking itself (calls that never enter the planner's transcript) and starts the verifier only if the recommendation departs from purchasing's order, the recommended option misses its service target, or the case's value is at or above a threshold.
 2. **Deterministic check first.** Every number and date of the rationale is matched against the evaluations and the case facts (up to rounding and percent); the ones found nowhere are listed for the verifier.
 3. **Independent judgment.** The verifier, on the strong model tier, gets the facts, the ranked evaluations, the recommendation, and that list, never the planner's reasoning, and calls `submit_verdict` once: pass, fail, or uncertain, with each discrepancy and the contradicting figure.
-4. **Effect.** A fail refuses the write like any other refused write: the planner corrects it once, and after a second refusal records the blocker for purchasing with `add_note`. Pass and uncertain let the write through; every report is in the run's result and trace, and its cost counts in the run's.
+4. **Effect.** A fail refuses the write like any other refused write: the planner corrects it once, and a second refusal ends the run with a note on the case that the harness writes (below). Pass and uncertain let the write through; every report is in the run's result and trace, and its cost counts in the run's.
 5. **Measurement.** `snm-evals verifier-mutations`: the planner writes real recommendations on the planner-evaluate cases, and the verifier checks them and copies with one planted defect each (a shifted figure, a false "inside the mandate", a false "lowest cost", a false "meets the service target", a missed mandate field left unsaid). First full run ([`verifier-mutations-v1`](../evals/reports/verifier-mutations-v1.md), 12 cases): 48/48 planted defects caught; 6 of the 12 real recommendations failed, and on review all six are real defects of the planner's text (a missed service target left unsaid in four, an overclaim, a label mix-up), no false alarm; about USD 0.026 per check. A pilot before the packet carried the quoted terms and the service target had raised false alarms on figures the verifier could not see.
 
 ## 8. Intake agent: a careful messenger (case-server side built, agent next)
@@ -171,6 +171,8 @@ Built: the case server's intake profile, bound to one case: `get_request`, `reco
 - **People decide.** No agent sends anything outside the company, records a decision, creates or changes a purchase order, or accepts a price.
 - **Governed by role.** Each role queries as its own service principal; site isolation, people-level data, and commercial figures are enforced by Unity Catalog and by the guard.
 - **Outward text is checked.** Text to a supplier may carry only the request's outward fields; the case server refuses anything else.
+- **Figures are checked before a recommendation is written** (on by default since 2026-11-02, [change card](../evals/failures/change-20261102-planner-write-checks.md)): every number and date of the rationale must be an evaluated value, the difference between the same field of two options, or the days between their dates; otherwise the write is refused with the figures named. The check traces a number, not the field it is said to belong to.
+- **Two attempts, then a visible failure.** The second refused write of a task ends the run; the harness records a note on the case saying what purchasing should do, the refusal codes, and the run id of the trace, and the case page shows it on its own card.
 - **Facts are not left to the model's wording.** A planner recommendation is shown under a facts line the case server writes from the recommended option's evaluation (arrival, stock-out risk against the service target, the mandate fields missed, expected total cost), so a missed target or mandate field reaches purchasing whatever the planner's text says.
 - **Untrusted input.** Tool outputs and supplier messages are data, never instructions.
 
@@ -179,7 +181,7 @@ Built: the case server's intake profile, bound to one case: `get_request`, `reco
 - Question banks with a development split and a locked test split; reference answers bound to the data snapshot; deterministic scoring (behavior routing, value matching with tolerances, leak checks); paired arm comparisons with McNemar tests and bootstrap intervals.
 - Planner suites with deterministic checks (one event, the right action, the rule's ranking).
 - The engine replayed against history and priced against a hindsight oracle (regret per case).
-- Prompt changes start from a failure card and are measured paired against the current version before adoption. Every batch is logged to MLflow with one trace per agent run. Reports: [`../evals/reports/`](../evals/reports/).
+- Prompt changes start from a failure card and are measured paired against the current version before adoption. Every batch is logged to MLflow with one trace per agent run; the app's agent runs go to their own experiment the same way, one trace per run, uploaded in the background (`apps/web/src/snm_web/tracing.py`). Reports: [`../evals/reports/`](../evals/reports/).
 
 ## 11. Status
 

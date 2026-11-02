@@ -134,21 +134,87 @@ function collectLeaves(value: unknown, numbers: number[], strings: Set<string>):
 	}
 }
 
-/** Numbers and dates of a rationale that appear in no evaluation or fact (up to rounding and percent). */
+/** A figure written as rounded ("about 20,400") may be rounded to its last non-zero digit. */
+const APPROXIMATE = /(?:\b(?:about|around|roughly|approximately|nearly|almost)|~)\s*$/i;
+const DAY_MS = 86_400_000;
+
+/** Every numeric and date leaf under the key that holds it (the same field of each option's evaluation). */
+function collectByKey(value: unknown, numbers: Map<string, number[]>, dates: Map<string, string[]>, key = ""): void {
+	const push = <T>(map: Map<string, T[]>, item: T) => map.set(key, [...(map.get(key) ?? []), item]);
+	if (Array.isArray(value)) {
+		for (const item of value) collectByKey(item, numbers, dates, key);
+	} else if (value && typeof value === "object") {
+		for (const [child, item] of Object.entries(value)) collectByKey(item, numbers, dates, child);
+	} else if (typeof value === "number" && Number.isFinite(value)) {
+		push(numbers, value);
+	} else if (typeof value === "string") {
+		const parsed = toNumber(value.replace(/%$/, ""));
+		if (parsed !== undefined) push(numbers, parsed);
+		if (/^\d{4}-\d{2}-\d{2}/.test(value)) push(dates, value.slice(0, 10));
+	}
+}
+
+/**
+ * The figures a rationale may derive from the evaluations without being refused: the difference between the same
+ * field of two options (a cost gap, a risk gap in percentage points) and the days between their dates. Sums,
+ * ratios, and differences across fields are not derived figures here.
+ */
+export function derivedFigures(sources: unknown[]): { differences: number[]; days: Set<number> } {
+	const numbers = new Map<string, number[]>();
+	const dates = new Map<string, string[]>();
+	for (const source of sources) collectByKey(source, numbers, dates);
+	const differences: number[] = [];
+	for (const values of numbers.values()) {
+		const unique = [...new Set(values)];
+		for (let i = 0; i < unique.length; i += 1) {
+			for (let j = i + 1; j < unique.length; j += 1) differences.push(Math.abs((unique[i] ?? 0) - (unique[j] ?? 0)));
+		}
+	}
+	const days = new Set<number>();
+	for (const values of dates.values()) {
+		const unique = [...new Set(values)].map((date) => Date.parse(`${date}T00:00:00Z`)).filter(Number.isFinite);
+		for (let i = 0; i < unique.length; i += 1) {
+			for (let j = i + 1; j < unique.length; j += 1) days.add(Math.round(Math.abs((unique[i] ?? 0) - (unique[j] ?? 0)) / DAY_MS));
+		}
+	}
+	return { differences: differences.filter((d) => d > 0), days };
+}
+
+/** The tolerance of a figure written as rounded: half its last non-zero place (20,400 -> 50). */
+function roundedTolerance(value: number): number {
+	if (!Number.isInteger(value) || value === 0) return 0;
+	let place = 1;
+	while (value % (place * 10) === 0) place *= 10;
+	return place > 1 ? place / 2 : 0;
+}
+
+/**
+ * Numbers and dates of a rationale that appear in no evaluation or fact: a figure is traced when it is an evaluated
+ * value (up to rounding and percent), the difference between the same field of two options, the days between two
+ * of their dates, or, written as rounded ("about 20,400"), one of those to its last non-zero digit.
+ */
 export function untracedFigures(text: string, sources: unknown[]): string[] {
 	const numbers: number[] = [];
 	const strings = new Set<string>();
 	for (const source of sources) collectLeaves(source, numbers, strings);
+	const { differences, days } = derivedFigures(sources);
+	const candidates = [...numbers, ...differences];
 	const untraced: string[] = [];
 	const cleaned = text.replace(IDS, " ");
 	for (const date of cleaned.match(DATE) ?? []) {
 		if (!strings.has(date)) untraced.push(date);
 	}
-	for (const token of cleaned.replace(DATE, " ").match(NUMBER) ?? []) {
+	const plain = cleaned.replace(DATE, " ");
+	for (const match of plain.matchAll(NUMBER)) {
+		const token = match[0];
 		const value = Number(token.replace(/[,%]/g, ""));
 		if (!Number.isFinite(value)) continue;
 		if (Number.isInteger(value) && Math.abs(value) <= MAX_COUNT && !token.endsWith("%")) continue;
-		if (!numbers.some((cell) => matchCell(value, cell) !== undefined)) untraced.push(token);
+		if (candidates.some((cell) => matchCell(value, cell) !== undefined)) continue;
+		if (Number.isInteger(value) && days.has(Math.abs(value))) continue;
+		const tolerance = APPROXIMATE.test(plain.slice(0, match.index)) ? roundedTolerance(Math.abs(value)) : 0;
+		if (tolerance > 0 && candidates.some((cell) => Math.abs(Math.abs(value) - Math.abs(cell)) <= tolerance)) continue;
+		untraced.push(token);
 	}
 	return [...new Set(untraced)];
 }

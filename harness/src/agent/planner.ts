@@ -43,6 +43,7 @@ import {
 	refusalMessage,
 	runVerifier,
 	triggersFor,
+	untracedFigures,
 	type VerificationReport,
 } from "./verifier.js";
 
@@ -130,6 +131,11 @@ export interface PlannerRunOptions {
 	runId?: string;
 	/** Prompt version to run; default PLANNER_PROMPT_VERSION. */
 	promptVersion?: PlannerPromptVersion;
+	/**
+	 * Check the figures of a recommendation's rationale against the case server's evaluations before it is written:
+	 * a number or date found in no evaluation refuses the write (the owner, 2026-11-02: on by default).
+	 */
+	figureCheck?: boolean;
 	/** Verify a recommendation before it is written (docs/TECHNICAL.md §7); off unless given. */
 	verify?: {
 		model: ModelRole;
@@ -154,9 +160,12 @@ export interface PlannerResult {
 	case_id: string;
 	task: PlannerTask;
 	role: string;
-	status: "written" | "no_write" | "budget_exhausted" | "error";
+	/** `refused`: the write was refused twice; the harness recorded a failure note on the case instead. */
+	status: "written" | "refused" | "no_write" | "budget_exhausted" | "error";
 	written?: { tool: string; event: Record<string, unknown> };
-	refused_writes: { tool: string; error: string }[];
+	refused_writes: { tool: string; code: string; error: string }[];
+	/** The note the harness recorded after the second refusal (status `refused`). */
+	failure_note?: string;
 	/** Proposals refused because the self-check was skipped (arm C); not counted as refused writes. */
 	protocol_refusals?: number;
 	/** One report per propose_recommendation the verifier saw (skipped ones included). */
@@ -172,6 +181,36 @@ export interface PlannerResult {
 	tool_errors: Record<string, number>;
 	wall_clock_s: number;
 	trace_path: string;
+}
+
+/** A task gets two attempts at its write; the second refusal ends the run with a failure note on the case. */
+export const MAX_REFUSED_WRITES = 2;
+
+/** What the planner is told when the figure check refuses its recommendation. */
+export function figureRefusal(untraced: readonly string[]): string {
+	return (
+		`The rationale has figures found in no evaluation of this case: ${untraced.join(", ")}. ` +
+		"Quote the evaluated figures as the tools return them, or leave the figure out."
+	);
+}
+
+/** The refusal's code from a case-server error ({"error": "UNRANKED", ...}), else the tool error's own. */
+export function refusalCode(output: string): string {
+	const server = /\\?"error\\?":\s*\\?"([A-Z_]+)/.exec(output);
+	if (server?.[1]) return server[1];
+	return /"code":\s*"([A-Z_]+)"/.exec(output)?.[1] ?? "REFUSED";
+}
+
+const FAILURE_NEXT: Record<PlannerTask, string> = {
+	prepare: "No request was drafted: prepare the case yourself.",
+	evaluate: "No planner recommendation: decide from the ranked options table.",
+	handoff: "No handoff was drafted: draft it yourself.",
+};
+
+/** The note the harness records on the case after the second refused write. */
+export function failureText(task: PlannerTask, refused: readonly { code: string }[], runId: string): string {
+	const codes = [...new Set(refused.map((r) => r.code))].join(", ");
+	return `${FAILURE_NEXT[task]} The planner's write was refused twice (${codes}); its trace is run ${runId}.`;
 }
 
 export async function runCaseTask(options: PlannerRunOptions): Promise<PlannerResult> {
@@ -192,8 +231,12 @@ export async function runCaseTask(options: PlannerRunOptions): Promise<PlannerRe
 	const usage: UsageTotals = { input: 0, output: 0, cache_read: 0, cache_write: 0, cost_usd: 0 };
 	const toolCalls: Record<string, number> = {};
 	const toolErrors: Record<string, number> = {};
-	const refused: { tool: string; error: string }[] = [];
+	const refused: { tool: string; code: string; error: string }[] = [];
 	const verifications: VerificationReport[] = [];
+	const figureCheck = options.figureCheck ?? true;
+	/** Writes the figure check refused, with their codes for the result (counted as refused writes). */
+	const figureRefusals = new Map<string, string[]>();
+	let failureNote: string | undefined;
 	const form: VerifyForm = options.verify?.form ?? "subagent";
 	/** Drafts the planner checked with check_recommendation (arm C), as canonical JSON. */
 	const checkedDrafts = new Set<string>();
@@ -213,6 +256,7 @@ export async function runCaseTask(options: PlannerRunOptions): Promise<PlannerRe
 		status,
 		...(written ? { written } : {}),
 		refused_writes: refused,
+		...(failureNote ? { failure_note: failureNote } : {}),
 		...(protocolRefusals ? { protocol_refusals: protocolRefusals } : {}),
 		...(options.verify ? { verifications } : {}),
 		...(lastText ? { final_text: lastText } : {}),
@@ -382,8 +426,25 @@ export async function runCaseTask(options: PlannerRunOptions): Promise<PlannerRe
 					protocolBlocks.add(toolCall.id);
 					return { block: true, reason: alone };
 				}
-				if (!options.verify || toolCall.name !== "propose_recommendation") return undefined;
+				if (toolCall.name !== "propose_recommendation") return undefined;
 				const draft = toolCall.arguments as unknown as Recommendation;
+				if (figureCheck) {
+					// Every number and date of the rationale must come from the case server's evaluations (up to
+					// rounding and percent); a refusal counts as a refused write.
+					try {
+						const { facts, ranking } = await context(draft);
+						const untraced = untracedFigures(String(draft.rationale_text ?? ""), [facts, ranking.ranked, ranking.reference]);
+						trace.write("figure_check", { untraced_figures: untraced });
+						if (untraced.length > 0) {
+							figureRefusals.set(toolCall.id, untraced);
+							return { block: true, reason: figureRefusal(untraced) };
+						}
+					} catch (checkError) {
+						// The check could not read the case: the case server's own checks still run on the write.
+						trace.write("figure_check", { error: checkError instanceof Error ? checkError.message : String(checkError) });
+					}
+				}
+				if (!options.verify) return undefined;
 				if (form === "self_check") {
 					if (checkedDrafts.has(canonical(draft))) return undefined;
 					const { triggered } = await context(draft).catch(() => ({ triggered: ["error"] }));
@@ -411,6 +472,8 @@ export async function runCaseTask(options: PlannerRunOptions): Promise<PlannerRe
 			},
 			finishTurn: () => {
 				if (written) return { action: "end" };
+				// Two refused writes end the run; the harness records the failure on the case (below).
+				if (refused.length >= MAX_REFUSED_WRITES) return { action: "end" };
 				if (turns >= options.budgets.maxTurns) budgetReason ??= "turns";
 				if (usage.cost_usd >= options.budgets.maxUsdPerRun) budgetReason ??= "usd";
 				return budgetReason ? { action: "end" } : undefined;
@@ -448,8 +511,10 @@ export async function runCaseTask(options: PlannerRunOptions): Promise<PlannerRe
 				const output = content.map((block) => block.text ?? "").join("\n");
 				if (writeTools.has(event.toolName)) {
 					if (event.isError && protocolBlocks.has(event.toolCallId)) protocolRefusals += 1;
-					else if (event.isError) refused.push({ tool: event.toolName, error: clip(output, 500) });
-					else written = { tool: event.toolName, event: payloadOf(event.result) ?? {} };
+					else if (event.isError) {
+						const code = figureRefusals.has(event.toolCallId) ? "UNTRACED_FIGURES" : refusalCode(output);
+						refused.push({ tool: event.toolName, code, error: clip(output, 500) });
+					} else written = { tool: event.toolName, event: payloadOf(event.result) ?? {} };
 				}
 				trace.write("tool", { id: event.toolCallId, name: event.toolName, is_error: event.isError, output: clip(output) });
 			}
@@ -464,8 +529,22 @@ export async function runCaseTask(options: PlannerRunOptions): Promise<PlannerRe
 			clearTimeout(timer);
 		}
 		const error = agent.state.errorMessage;
+		if (!written && refused.length >= MAX_REFUSED_WRITES) {
+			// A visible failure instead of a silent one: purchasing sees why there is no draft and what to do.
+			const note = failureText(options.task, refused, runId);
+			const tool = connected.tools.find((candidate) => candidate.name === "add_note");
+			try {
+				if (!tool) throw new Error("The case server has no add_note.");
+				await tool.execute(`failure-${runId}`, { case_id: options.caseId, text: note });
+				failureNote = note;
+				trace.write("failure_note", { text: note });
+			} catch (noteError) {
+				trace.write("failure_note", { text: note, error: noteError instanceof Error ? noteError.message : String(noteError) });
+			}
+		}
 		let status: PlannerResult["status"];
 		if (written) status = "written";
+		else if (refused.length >= MAX_REFUSED_WRITES) status = "refused";
 		else if (budgetReason) status = "budget_exhausted";
 		else if (error) status = "error";
 		else status = "no_write";

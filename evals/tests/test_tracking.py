@@ -322,3 +322,26 @@ def test_discovery_tasks_have_their_own_pass_rate() -> None:
     assert metrics["main/pass_rate"] == 1.0
     assert metrics["main/discovery_pass_rate"] == 0.0
     assert metrics["main/runs"] == 2
+
+
+def test_one_app_run_becomes_one_trace_without_a_batch_run(monkeypatch, tmp_path) -> None:
+    """The owner, 2026-11-02: production (app) runs traced in MLflow like evaluation runs."""
+    mlflow = pytest.importorskip("mlflow")
+    monkeypatch.setenv("MLFLOW_TRACKING_URI", (tmp_path / "mlruns").as_uri())
+    monkeypatch.setenv("MLFLOW_ALLOW_FILE_STORE", "true")
+    mlflow.set_tracking_uri((tmp_path / "mlruns").as_uri())
+    mlflow.tracing.reset()  # the trace exporter is set up once per process, for the store of that time
+    tracking.configure_tracking()
+    path = tmp_path / "trace.jsonl"
+    events = new_trace("planner-run-1")
+    events[0] = {**events[0], "case_id": "C-1", "task": "evaluate"}
+    path.write_text("".join(json.dumps(event) + "\n" for event in events), encoding="utf-8")
+
+    trace_id = tracking.log_run(path, "app-runs", {"snm.kind": "planner", "run_id": "planner-run-1"})
+    experiment_id = mlflow.MlflowClient().get_experiment_by_name("app-runs").experiment_id
+    [trace] = mlflow.MlflowClient().search_traces(locations=[experiment_id])
+    assert trace.info.trace_id == trace_id
+    assert trace.info.tags["snm.kind"] == "planner" and trace.info.tags["run_id"] == "planner-run-1"
+    assert "mlflow.sourceRun" not in trace.info.trace_metadata
+    root = next(span for span in trace.data.spans if span.name == "agent_run")
+    assert root.inputs["case_id"] == "C-1" and root.inputs["task"] == "evaluate"

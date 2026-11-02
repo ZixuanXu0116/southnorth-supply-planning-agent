@@ -385,6 +385,18 @@ def create_app(
                 "at": proposed.created_at.strftime("%Y-%m-%d %H:%M"),
             }
         events = [e for e in case["events"]]
+        # The planner's last step, when it is a note (nothing needed, or a failure after two refused writes):
+        # shown on its own card, since the history table hides it.
+        last = next((e for e in reversed(view.events) if e.actor_kind == "planner_agent"), None)
+        planner_note = (
+            {
+                "text": last.payload.get("text"),
+                "at": last.created_at.strftime("%Y-%m-%d %H:%M"),
+                "run_id": last.run_id,
+            }
+            if last is not None and last.event_type == "note_added"
+            else None
+        )
         return page(
             request,
             "case.html",
@@ -411,6 +423,7 @@ def create_app(
             events=events,
             receipt=receipt,
             planner_rec=planner_rec,
+            planner_note=planner_note,
             planner_available=settings.planner_available,
             vendor_name=vendor_names().get(
                 str(case["engine"].get("vendor")), case["engine"].get("vendor_name")
@@ -458,6 +471,10 @@ def create_app(
         )
         if result.get("status") == "error":
             return _redirect(back, error=f"Planner run failed: {result.get('error')}")
+        if result.get("status") == "refused":
+            return _redirect(
+                back, error=f"Planner ({task}): its write was refused twice; see the planner note."
+            )
         text = f"Planner ({task}): {written.get('tool') or result.get('status')}."
         return _redirect(back, notice=text)
 

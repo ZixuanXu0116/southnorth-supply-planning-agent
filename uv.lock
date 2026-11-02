@@ -1173,6 +1173,7 @@ dependencies = [
     { name = "python-multipart" },
     { name = "snm-cases" },
     { name = "snm-data" },
+    { name = "snm-evals" },
     { name = "uvicorn" },
 ]
 
@@ -1184,6 +1185,7 @@ requires-dist = [
     { name = "python-multipart", specifier = ">=0.0.18" },
     { name = "snm-cases", editable = "case_server" },
     { name = "snm-data", editable = "data" },
+    { name = "snm-evals", editable = "evals" },
     { name = "uvicorn", specifier = ">=0.30" },
 ]
 
