@@ -42,7 +42,7 @@ flowchart TB
 
 - **Numbers come from code, not the model.** The planner reads, compares, and explains; every figure it cites comes from a tool, and the case server refuses a write whose ids or order do not match its own evaluation.
 - **The loop is thin and visible.** A TypeScript harness on PI's agent core: a fixed prompt, a tool set chosen per task, hooks before every tool call (one write per task, alone in its turn; budgets), and a trace of every turn.
-- **Isolation.** Python tools run as MCP servers in their own processes (or containers) with only their own credentials; the model's key never reaches them. Supplier text and documents are data, never instructions.
+- **Isolation.** Python tools run as MCP servers in their own processes with only their own credentials; the model's key never reaches them. Supplier text and documents are data, never instructions.
 - **Measured change.** Every fix starts from a traced failure (a failure card), is replayed before and after, and stays as a regression test.
 
 Technical details: [`docs/TECHNICAL.md`](docs/TECHNICAL.md) · decisions: [`docs/decisions/`](docs/decisions/).
@@ -68,11 +68,11 @@ uv run snm-data plan --from-profile small   # the engine opens the cases
 uv run snm-web serve                        # open http://127.0.0.1:8000 and choose Purchasing
 ```
 
-The agents also need Node 22 (`npm ci && npm run build -w harness`) and an Anthropic key (`SNM_ANTHROPIC_API_KEY`, `SNM_MODEL_MAIN`). One MCP server per container (Docker Compose) and a Databricks App deployment: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+The agents also need Node 22 (`npm ci && npm run build -w harness`) and an Anthropic key (`SNM_ANTHROPIC_API_KEY`, `SNM_MODEL_MAIN`). Databricks App deployment: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
 ## Status (2026-11-02)
 
-- **Built:** engine, case store, purchasing and supplier pages; the planner agent with a verifier sub-agent; supplier replies read from PDFs, screenshots and Excel; the data agent; governance; evaluations (regret, trace soundness, field accuracy); one MCP server per container; deployed as a Databricks App.
+- **Built:** engine, case store, purchasing and supplier pages; the planner agent with a verifier sub-agent; supplier replies read from PDFs, screenshots and Excel; the data agent; governance; evaluations (regret, trace soundness, field accuracy); each MCP server in its own process; deployed as a Databricks App.
 - **In progress:** the intake agent (its case-server side is built); an improvement loop that turns failures into reviewed fixes.
 - **Planned:** questions inside a case thread for purchasing and suppliers; supplier replies by email.
 
