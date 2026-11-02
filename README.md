@@ -47,6 +47,10 @@ flowchart TB
 
 ![Processes and boundaries: the model, the TypeScript harness, the Python case server, and Databricks, and what passes between them](docs/images/harness-processes.svg)
 
+**One planner task, turn by turn**
+
+![One planner task, turn by turn: the context goes to the model, every tool call is checked, reads run freely, the one write is checked by the case server, and finishTurn decides whether to stop](docs/images/harness-loop.svg)
+
 Technical details: [`docs/TECHNICAL.md`](docs/TECHNICAL.md) · decisions: [`docs/decisions/`](docs/decisions/).
 
 ## How it is evaluated
