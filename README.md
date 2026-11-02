@@ -6,8 +6,6 @@ A supply-planning copilot on synthetic SAP-shaped data: a deterministic engine f
 
 > This repo mostly shows recommendations. At work I also build chat agents for purchasing and for suppliers on the same kind of semantic layer, knowledge base and harness, every answer traced and logged, to support decisions with more tailored information. I have not rebuilt that part here yet.
 
-![Case page: options ranked by expected cost with stock-out risk and mandate flags, and the planner agent's recommendation](docs/images/case-page.png)
-
 ## How it works
 
 ```mermaid
