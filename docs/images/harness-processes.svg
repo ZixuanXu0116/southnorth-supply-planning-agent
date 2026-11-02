@@ -1,0 +1,112 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 636" width="920" height="636" role="img" aria-labelledby="t1 d1">
+  <title id="t1">Processes and boundaries of the planner agent</title>
+  <desc id="d1">Four layers: the model, the TypeScript harness, the Python case server, and Databricks. Each turn the harness sends the model the whole context and gets text and tool calls back; it forwards tool calls to the case server over MCP and gets small results or an error code with a hint; the case server reads the planning tables and appends case events.</desc>
+  <style>
+    svg { --bg: #f7f8fa; --fg: #1d2430; --muted: #5b6474; --panel: #ffffff; --line: #8a93a3;
+          --model: #e9eef7; --harness: #e4f1ea; --server: #f8eedf; --lake: #eee8f6; --accent: #0b6e4f; }
+    @media (prefers-color-scheme: dark) {
+      svg { --bg: #141820; --fg: #e6e9ef; --muted: #a2abba; --panel: #1c212b; --line: #6d7686;
+            --model: #1f2733; --harness: #1b2d26; --server: #332a1c; --lake: #2a2435; --accent: #5fd3a8; }
+    }
+    .bg { fill: var(--bg); }
+    .band-model { fill: var(--model); } .band-harness { fill: var(--harness); }
+    .band-server { fill: var(--server); } .band-lake { fill: var(--lake); }
+    .box { fill: var(--panel); stroke: var(--line); stroke-width: 1; }
+    .edge { fill: none; stroke: var(--fg); stroke-width: 1.3; }
+    .name { font: 600 15px -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif; fill: var(--fg); }
+    .sub { font: 12px -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif; fill: var(--muted); }
+    .key { font: 600 12px -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif; fill: var(--accent); }
+    .head { font: 600 12.5px -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif; fill: var(--fg); }
+    .detail { font: 11.5px -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif; fill: var(--muted); }
+    .label { font: 11.5px -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif; fill: var(--fg); }
+    .arrow { fill: var(--fg); }
+  </style>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="arrow" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+  </defs>
+  <rect class="bg" x="0" y="0" width="920" height="636"/>
+
+  <!-- Model -->
+  <rect class="band-model" x="16" y="16" width="888" height="96" rx="8"/>
+  <text class="name" x="34" y="46">Model</text>
+  <text class="sub" x="34" y="66">Claude API</text>
+  <text class="sub" x="34" y="84">sees only what it is sent this turn</text>
+  <rect class="box" x="272" y="38" width="308" height="50" rx="5"/>
+  <text class="head" x="286" y="58">Reads the context</text>
+  <text class="detail" x="286" y="76">the prompt, the tools, the turns so far</text>
+  <rect class="box" x="596" y="38" width="292" height="50" rx="5"/>
+  <text class="head" x="610" y="58">Replies</text>
+  <text class="detail" x="610" y="76">text and zero or more tool calls</text>
+
+  <line class="edge" x1="300" y1="114" x2="300" y2="156" marker-end="url(#a)"/>
+  <text class="label" x="312" y="139">each turn: the whole context, stable prefix cached</text>
+  <line class="edge" x1="640" y1="156" x2="640" y2="114" marker-end="url(#a)"/>
+  <text class="label" x="652" y="139">text + tool calls</text>
+
+  <!-- Harness -->
+  <rect class="band-harness" x="16" y="158" width="888" height="136" rx="8"/>
+  <text class="name" x="34" y="188">Harness</text>
+  <text class="sub" x="34" y="208">TypeScript process</text>
+  <text class="key" x="34" y="230">holds the model key</text>
+  <text class="sub" x="34" y="250">decides what the model sees</text>
+  <text class="sub" x="34" y="268">and when it stops</text>
+  <rect class="box" x="272" y="176" width="308" height="50" rx="5"/>
+  <text class="head" x="286" y="196">PI agent core</text>
+  <text class="detail" x="286" y="214">the loop: model call, tool calls, next turn</text>
+  <rect class="box" x="596" y="176" width="292" height="50" rx="5"/>
+  <text class="head" x="610" y="196">Hooks on every call</text>
+  <text class="detail" x="610" y="214">beforeToolCall: run it? · finishTurn: stop?</text>
+  <rect class="box" x="272" y="234" width="308" height="50" rx="5"/>
+  <text class="head" x="286" y="254">Frozen context</text>
+  <text class="detail" x="286" y="272">prompt rendered once · tools kept per task</text>
+  <rect class="box" x="596" y="234" width="292" height="50" rx="5"/>
+  <text class="head" x="610" y="254">Budgets and records</text>
+  <text class="detail" x="610" y="272">30 turns · $0.75 · 300 s · one trace per run</text>
+
+  <line class="edge" x1="300" y1="296" x2="300" y2="338" marker-end="url(#a)"/>
+  <text class="label" x="312" y="321">MCP: tool name + arguments</text>
+  <line class="edge" x1="640" y1="338" x2="640" y2="296" marker-end="url(#a)"/>
+  <text class="label" x="652" y="321">small result + ids, or error code + hint</text>
+
+  <!-- Case server -->
+  <rect class="band-server" x="16" y="340" width="888" height="136" rx="8"/>
+  <text class="name" x="34" y="370">Case server</text>
+  <text class="sub" x="34" y="390">Python process · MCP</text>
+  <text class="key" x="34" y="412">no model key</text>
+  <text class="sub" x="34" y="432">the engine's numbers and</text>
+  <text class="sub" x="34" y="450">the only writer of cases</text>
+  <rect class="box" x="272" y="358" width="308" height="50" rx="5"/>
+  <text class="head" x="286" y="378">Planner profile</text>
+  <text class="detail" x="286" y="396">case and pricing tools only, no data tools</text>
+  <rect class="box" x="596" y="358" width="292" height="50" rx="5"/>
+  <text class="head" x="610" y="378">Engine numbers</text>
+  <text class="detail" x="610" y="396">evaluate_option, rank_options: expected cost</text>
+  <rect class="box" x="272" y="416" width="308" height="50" rx="5"/>
+  <text class="head" x="286" y="436">Checks every write</text>
+  <text class="detail" x="286" y="454">cited ids · server order · choices · outward text</text>
+  <rect class="box" x="596" y="416" width="292" height="50" rx="5"/>
+  <text class="head" x="610" y="436">Append-only events</text>
+  <text class="detail" x="610" y="454">state machine: who may record what, when</text>
+
+  <line class="edge" x1="300" y1="478" x2="300" y2="520" marker-end="url(#a)"/>
+  <text class="label" x="312" y="503">append-only case events</text>
+  <line class="edge" x1="640" y1="520" x2="640" y2="478" marker-end="url(#a)"/>
+  <text class="label" x="652" y="503">planning tables, read only</text>
+
+  <!-- Databricks -->
+  <rect class="band-lake" x="16" y="522" width="888" height="98" rx="8"/>
+  <text class="name" x="34" y="552">Databricks</text>
+  <text class="sub" x="34" y="572">Unity Catalog: grants, row</text>
+  <text class="sub" x="34" y="590">filters, masks per role</text>
+  <rect class="box" x="272" y="544" width="196" height="50" rx="5"/>
+  <text class="head" x="286" y="564">Planning tables</text>
+  <text class="detail" x="286" y="582">curated, from the engine</text>
+  <rect class="box" x="482" y="544" width="196" height="50" rx="5"/>
+  <text class="head" x="496" y="564">cases schema</text>
+  <text class="detail" x="496" y="582">Delta, append-only</text>
+  <rect class="box" x="692" y="544" width="196" height="50" rx="5"/>
+  <text class="head" x="706" y="564">Volumes</text>
+  <text class="detail" x="706" y="582">supplier files · run records</text>
+</svg>

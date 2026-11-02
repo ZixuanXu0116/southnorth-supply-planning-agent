@@ -45,6 +45,10 @@ flowchart TB
 - **Isolation.** Python tools run as MCP servers in their own processes with only their own credentials; the model's key never reaches them. Supplier text and documents are data, never instructions.
 - **Measured change.** Every fix starts from a traced failure (a failure card), is replayed before and after, and stays as a regression test.
 
+**Processes and boundaries**
+
+![Processes and boundaries: the model, the TypeScript harness, the Python case server, and Databricks, and what passes between them](docs/images/harness-processes.svg)
+
 Technical details: [`docs/TECHNICAL.md`](docs/TECHNICAL.md) · decisions: [`docs/decisions/`](docs/decisions/).
 
 ## How it is evaluated
