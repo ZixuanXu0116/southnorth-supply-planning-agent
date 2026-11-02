@@ -25,7 +25,7 @@ columns:
 tests:
   unique: [[case_id, seq]]
   accepted_values:
-    - {column: event_type, values: [case_opened, case_updated, condition_cleared, request_drafted, transfer_prepared, triage_overridden, request_sent, message_recorded, proposal_recorded, escalated, recommendation_proposed, decision_requested, decision_recorded, handoff_drafted, handed_off, receipt_confirmed, case_cancelled, note_added, mandate_set, attachment_recorded]}
+    - {column: event_type, values: [case_opened, case_updated, condition_cleared, request_drafted, transfer_prepared, triage_overridden, request_sent, message_recorded, proposal_recorded, escalated, recommendation_proposed, decision_requested, decision_recorded, handoff_drafted, handed_off, receipt_confirmed, case_cancelled, note_added, mandate_set, attachment_recorded, extraction_drafted]}
     - {column: state_after, values: [new, prepared, sent, responded, recommended, decided, handed_off, closed, cancelled]}
     - {column: actor_kind, values: [engine, planner_agent, intake_agent, human, system]}
 access: [ops_analyst_global, site_manager_rr, site_manager_cn, purchasing, case_writer]

@@ -1,0 +1,37 @@
+# The Databricks App (docs/DEPLOYMENT.md, Databricks App). deploy/databricks/deploy.py writes app.yaml from this
+# template and appends the model settings from the deployer's environment (model IDs are configuration).
+command:
+  - python
+  - -m
+  - snm_web.cli
+  - serve
+  - --databricks
+  - --host
+  - 0.0.0.0
+  - --port
+  - $DATABRICKS_APP_PORT
+  - --runs
+  - /tmp/snm-runs
+  # The planner's case server runs once beside the pages (localhost, Streamable HTTP, a token made at start)
+  # instead of starting with every planner run.
+  - --case-server-port
+  - "8100"
+  # The access log and agent traces under /tmp are lost when the app stops: copies go to a volume.
+  - --runs-volume
+  - /Volumes/snm/cases/runs
+env:
+  # App resources (deploy.py creates them): the key as a secret, the warehouse with CAN_USE.
+  - name: SNM_ANTHROPIC_API_KEY
+    valueFrom: anthropic-key
+  - name: DATABRICKS_WAREHOUSE_ID
+    valueFrom: sql-warehouse
+  # The planner's case server writes to the cases schema as the app's own service principal (the case writer).
+  - name: SNM_CASE_BACKEND
+    value: databricks
+  # No uv in the app: the harness starts the Python servers with the app's python.
+  - name: SNM_SERVER_PYTHON
+    value: python
+  - name: SNM_CATALOG
+    value: snm
+  - name: NODE_NO_WARNINGS
+    value: "1"

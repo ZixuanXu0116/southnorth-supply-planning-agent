@@ -57,7 +57,7 @@ def run_case(
     planning_dir: Path,
     runs_dir: Path,
     as_of: str,
-    prompt_version: str = "v5",
+    prompt_version: str = "v6",
 ) -> dict[str, Any]:
     role = ROLE_FOR.get(case["lever"], {}).get(case["plant"], "purchasing")
     command = [
@@ -159,7 +159,7 @@ def run_prepare_suite(
     per_lever: int = 3,
     parallel: int = 3,
     as_of: str = "2026-09-21",
-    prompt_version: str = "v5",
+    prompt_version: str = "v6",
 ) -> list[dict[str, Any]]:
     if out_dir.exists():
         shutil.rmtree(out_dir)

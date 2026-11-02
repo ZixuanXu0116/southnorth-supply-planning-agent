@@ -1,4 +1,5 @@
-"""MCP server (stdio) exposing guarded, read-only data tools to the agent harness.
+"""MCP server exposing guarded, read-only data tools to the agent harness: stdio by default, Streamable HTTP
+with SNM_MCP_TRANSPORT=http (one server per container and role, decision record 010; see ``http.py``).
 
 Configuration (environment variables):
     SNM_ROLE           agent role (default ops_analyst_global)
@@ -31,6 +32,7 @@ from snm_data.semantic import METRIC_VIEWS_DIR, load_metric_views
 
 from .audit import AuditLog
 from .backend import BackendError, DatabricksBackend, QueryResult
+from .http import headers_middleware, serve
 from .metrics import MetricFilter, MetricOrder
 from .policy import AccessPolicy
 from .sql_guard import SqlGuard
@@ -85,7 +87,9 @@ def _call(function, **kwargs: Any) -> dict[str, Any]:
 
 
 def build_server(tools: DataTools) -> MCPServer:
-    server = MCPServer(name="snm-tools", instructions=INSTRUCTIONS, version="0.1.0")
+    server = MCPServer(
+        name="snm-tools", instructions=INSTRUCTIONS, version="0.1.0", middleware=[headers_middleware]
+    )
 
     @server.tool(name="list_tables")
     def list_tables(schema: str | None = None) -> dict[str, Any]:
@@ -213,7 +217,7 @@ def create_tools() -> DataTools:
 
 
 def main() -> None:
-    build_server(create_tools()).run("stdio")
+    serve(build_server(create_tools()))
 
 
 if __name__ == "__main__":

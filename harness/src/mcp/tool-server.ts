@@ -123,9 +123,24 @@ export function snmToolServerLaunch(options: ToolServerLaunchOptions = {}): Tool
 	if (options.auditDir) overrides.SNM_AUDIT_DIR = options.auditDir;
 	if (options.metadata) overrides.SNM_METADATA = options.metadata;
 	return {
-		command: options.command ?? "uv",
-		args: options.args ?? ["run", "--frozen", "--quiet", "snm-tools"],
+		...serverCommand(source, "snm_tools.server", "snm-tools", options),
 		cwd: options.cwd ?? REPO_ROOT,
 		env: toolServerEnvironment(source, overrides),
 	};
+}
+
+/**
+ * How a Python server starts: `uv run` in the repository (development), or, where the packages are installed
+ * and uv is absent (a deployed app), `SNM_SERVER_PYTHON -m <module>`. An explicit command wins.
+ */
+export function serverCommand(
+	source: Record<string, string | undefined>,
+	module: string,
+	script: string,
+	options: { command?: string; args?: string[] } = {},
+): { command: string; args: string[] } {
+	if (options.command) return { command: options.command, args: options.args ?? [] };
+	const python = source.SNM_SERVER_PYTHON?.trim();
+	if (python) return { command: python, args: ["-m", module] };
+	return { command: "uv", args: options.args ?? ["run", "--frozen", "--quiet", script] };
 }

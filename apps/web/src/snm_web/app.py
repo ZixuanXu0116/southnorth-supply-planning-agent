@@ -13,6 +13,7 @@ options.
 from __future__ import annotations
 
 import json
+import os
 import re
 import urllib.parse
 from collections.abc import Callable
@@ -24,8 +25,9 @@ from typing import Any
 from fastapi import FastAPI, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
+from pydantic import ValidationError
 
-from snm_cases import excel, model
+from snm_cases import documents, excel, model
 from snm_cases.service import XLSX, Actor, CaseError, CaseService, CaseView
 from snm_cases.store import Event
 
@@ -35,7 +37,7 @@ PURCHASING = "purchasing"
 SUPPLIER_PREFIX = "supplier_"
 ORDER_CONDITIONS = ("shortage", "warning")
 TRANSFER_CONDITIONS = ("pull", "excess")
-MAX_UPLOAD_BYTES = 2_000_000
+MAX_UPLOAD_BYTES = 8_000_000  # a screenshot or a scanned PDF
 PLANNER_TASKS = ("prepare", "evaluate")  # the planner's tasks the case page offers
 
 
@@ -50,13 +52,12 @@ class WebSettings:
 
     @property
     def planner_available(self) -> bool:
-        return (
-            self.mode == "local"
-            and self.harness_cli is not None
-            and self.harness_cli.exists()
-            and self.store_dir is not None
-            and self.planning_dir is not None
-        )
+        if self.harness_cli is None or not self.harness_cli.exists():
+            return False
+        if self.mode == "lakehouse":
+            # A deployed app: the harness's case server writes to the cases schema (SNM_CASE_BACKEND).
+            return os.environ.get("SNM_CASE_BACKEND") == "databricks"
+        return self.store_dir is not None and self.planning_dir is not None
 
 
 class Audit:
@@ -73,6 +74,8 @@ class Audit:
 
 
 PlannerRunner = Callable[[WebSettings, str, str, str, str], dict[str, Any]]
+# (settings, file content, file name, the request's outward fields) -> checked draft, method, cost, run
+ExtractorRunner = Callable[[WebSettings, bytes, str, dict[str, Any]], dict[str, Any]]
 
 
 def _redirect(url: str, notice: str | None = None, error: str | None = None) -> RedirectResponse:
@@ -133,9 +136,23 @@ def option_rows(
                 "option_cost": cost,
                 "line_down": line_down,
                 "expected_total": None if cost is None or line_down is None else cost + line_down,
+                # What purchasing would pay: the goods at the offered price in place of the price difference.
+                "expected_spend": None
+                if cost is None or line_down is None or option.get("purchase_value") is None
+                else cost
+                + line_down
+                + option["purchase_value"]
+                - (option.get("price_difference_cost") or 0.0),
             }
         )
     return rows
+
+
+def _facts_line(service: CaseService, actor: Actor, case_id: str, recommended: str) -> str | None:
+    try:
+        return service.facts_line(actor, case_id, recommended)
+    except CaseError:
+        return None
 
 
 def _receipt_default(service: CaseService, view: CaseView) -> dict[str, Any]:
@@ -157,7 +174,12 @@ def _receipt_default(service: CaseService, view: CaseView) -> dict[str, Any]:
     return {"quantity": sum(r.quantity for r in receipts), "date": last.isoformat()}
 
 
-def create_app(service: CaseService, settings: WebSettings, planner: PlannerRunner | None = None) -> FastAPI:
+def create_app(
+    service: CaseService,
+    settings: WebSettings,
+    planner: PlannerRunner | None = None,
+    extractor: ExtractorRunner | None = None,
+) -> FastAPI:
     app = FastAPI(title="SouthNorth Solutions cases", docs_url=None, redoc_url=None, openapi_url=None)
     templates = Jinja2Templates(directory=str(TEMPLATES))
     templates.env.filters["money"] = lambda v: "" if v is None else f"{float(v):,.2f}"
@@ -197,7 +219,12 @@ def create_app(service: CaseService, settings: WebSettings, planner: PlannerRunn
         return templates.TemplateResponse(request, name, context)
 
     def act(
-        request: Request, action: str, case_id: str | None, back: str, run: Callable[[], list[Event]]
+        request: Request,
+        action: str,
+        case_id: str | None,
+        back: str,
+        run: Callable[[], list[Event]],
+        notice: str | None = None,
     ) -> RedirectResponse:
         role = role_of(request)
         try:
@@ -231,7 +258,7 @@ def create_app(service: CaseService, settings: WebSettings, planner: PlannerRunn
             outcome="ok",
             events=[f"{e.seq}:{e.event_type}" for e in events],
         )
-        return _redirect(back, notice=f"Recorded: {', '.join(types)}." if types else "Done.")
+        return _redirect(back, notice=notice or (f"Recorded: {', '.join(types)}." if types else "Done."))
 
     def forbidden(request: Request, expected: str) -> HTMLResponse:
         return page(request, "role.html", roles=_role_choices(service, vendor_names()), required=expected)
@@ -316,7 +343,8 @@ def create_app(service: CaseService, settings: WebSettings, planner: PlannerRunn
         view = service.view(case_id)
         is_transfer = case["engine"].get("condition") in TRANSFER_CONDITIONS
         options = []
-        for choice in service.decision_choices(case_id):
+        offers = [p["proposal_id"] for p in case["proposals"] if p.get("kind") != "decline"]
+        for choice in [*offers, *service.reference_options(case_id)]:
             try:
                 options.append(service.evaluate_option(buyer, case_id, choice))
             except CaseError:
@@ -346,6 +374,9 @@ def create_app(service: CaseService, settings: WebSettings, planner: PlannerRunn
                 if [o for o in submitted if o.startswith("P-")] != server_order
                 else None,
                 "by_agent": proposed.actor_kind == "planner_agent",
+                # Written by the case server with the event; recomputed for one written before it existed.
+                "facts_line": proposed.payload.get("facts_line")
+                or _facts_line(service, buyer, case_id, str(proposed.payload["recommended"])),
                 # Offers recorded after it make the recommendation out of date.
                 "stale": any(
                     e.event_type == "proposal_recorded" and e.seq > proposed.seq for e in view.events
@@ -369,6 +400,8 @@ def create_app(service: CaseService, settings: WebSettings, planner: PlannerRunn
             choices=service.decision_choices(case_id),
             decision_default=None if is_transfer else service.recommended_choice(case_id),
             draft=draft.payload if draft else None,
+            extraction_drafts=_drafts_for_page(service, case_id),
+            draft_fields=DRAFT_FIELDS,
             defaults=defaults,
             mandate=mandate,
             mandate_kinds=model.PROPOSAL_KINDS,
@@ -617,6 +650,48 @@ def create_app(service: CaseService, settings: WebSettings, planner: PlannerRunn
             return _redirect(f"/supplier/{case_id}", error=str(error))
         return _download(attachment.file_name, attachment.content_type, content)
 
+    def _supplier_document(
+        vendor: str, case_id: str, body: str, document: tuple[str, bytes, str]
+    ) -> list[Event]:
+        events = service.supplier_reply(vendor, case_id, body, [], document)
+        attachment = next(e for e in events if e.event_type == "attachment_recorded")
+        view = service.view(case_id)
+        sent = next((e for e in reversed(view.events) if e.event_type == "request_drafted"), None)
+        outward = (sent.payload.get("outward") if sent else None) or {"material": view.material}
+        run = (extractor or _no_extractor)(settings, document[1], document[0], outward)
+        events.append(
+            service.record_extraction(
+                case_id,
+                attachment.payload["attachment_id"],
+                run["draft"],
+                run["method"],
+                run.get("cost_usd", 0.0),
+                run.get("run_id"),
+            )
+        )
+        return events
+
+    @app.post("/cases/{case_id}/drafts/{seq}/confirm")
+    async def confirm_draft(request: Request, case_id: str, seq: int) -> Response:
+        if role_of(request) != PURCHASING:
+            return forbidden(request, PURCHASING)
+        form = await request.form()
+        back = f"/cases/{case_id}"
+        draft = next((e for e in service.extraction_drafts(case_id) if e.seq == seq), None)
+        if draft is None:
+            return _redirect(back, error="That draft is already recorded or does not exist.")
+        try:
+            options = _confirmed_options(form, draft.payload.get("options", []))
+        except ValueError as error:
+            return _redirect(back, error=f"Not recorded: {error}")
+        return act(
+            request,
+            "confirm_draft",
+            case_id,
+            back,
+            lambda: [service.confirm_extraction(buyer, case_id, seq, options)],
+        )
+
     @app.post("/supplier/{case_id}/reply")
     async def supplier_reply(
         request: Request, case_id: str, body: str = Form(""), sheet: UploadFile | None = File(None)
@@ -632,7 +707,33 @@ def create_app(service: CaseService, settings: WebSettings, planner: PlannerRunn
         if sheet is not None and sheet.filename:
             content = await sheet.read(MAX_UPLOAD_BYTES + 1)
             if len(content) > MAX_UPLOAD_BYTES:
-                return _redirect(back, error="The file is larger than 2 MB.")
+                return _redirect(back, error="The file is larger than 8 MB.")
+            kind = documents.kind_of(content)
+            if kind is None:
+                audit.write(
+                    role=role,
+                    action="supplier_reply",
+                    path=request.url.path,
+                    case_id=case_id,
+                    outcome="refused",
+                    error="FILE: not a PDF, PNG, JPEG, or Excel workbook",
+                )
+                return _redirect(back, error="Upload a PDF, a PNG or JPEG image, or an Excel workbook.")
+            if not (kind == "xlsx" and excel.is_request_sheet(content)):
+                # A supplier's own document: kept as sent, read into a draft, confirmed by purchasing.
+                document = (
+                    Path(sheet.filename).name,
+                    content,
+                    sheet.content_type or "application/octet-stream",
+                )
+                return act(
+                    request,
+                    "supplier_document",
+                    case_id,
+                    back,
+                    lambda: _supplier_document(vendor, case_id, body, document),
+                    notice="Thank you: your document was received; purchasing will confirm the offers in it.",
+                )
             parsed, problems = excel.parse_reply(content, case_id)
             if problems:
                 audit.write(
@@ -658,6 +759,112 @@ def create_app(service: CaseService, settings: WebSettings, planner: PlannerRunn
         )
 
     return app
+
+
+DRAFT_FIELDS = (
+    ("kind", "Kind"), ("quantity", "Qty"), ("unit_price", "Unit price (USD)"),
+    ("surcharge_pct", "Surcharge %"), ("surcharge_amount", "Surcharge"), ("freight_amount", "Freight"),
+    ("ship_date", "Ship"), ("arrival_date", "Arrival"), ("valid_until", "Valid until"),
+    ("split_deliveries", "Split (qty@date; ...)"),
+    ("conditions", "Conditions"),
+)  # fmt: skip
+
+
+def _no_extractor(
+    settings: WebSettings, content: bytes, file_name: str, request: dict[str, Any]
+) -> dict[str, Any]:
+    from snm_cases.documents import check_draft, read_document, rules_extract
+
+    view = read_document(content)
+    return {
+        "draft": check_draft(rules_extract(view), view),
+        "method": "rules",
+        "cost_usd": 0.0,
+        "run_id": None,
+    }
+
+
+def _split_text(value: Any) -> str:
+    return "; ".join(f"{float(p['quantity']):g}@{p['arrival_date']}" for p in value or [])
+
+
+def _drafts_for_page(service: CaseService, case_id: str) -> list[dict[str, Any]]:
+    """The open drafts with each field as the form shows it."""
+    names = {a.attachment_id: a.file_name for a in service.store.attachments(case_id)}
+    out = []
+    for event in service.extraction_drafts(case_id):
+        payload = event.payload
+        options = []
+        for option in payload.get("options", []):
+            cells = {}
+            for name, _ in DRAFT_FIELDS:
+                entry = option["fields"].get(name) or {}
+                value = entry.get("value")
+                shown = _split_text(value) if name == "split_deliveries" else ("" if value is None else value)
+                cells[name] = {**entry, "shown": shown}
+            currency = (option["fields"].get("currency") or {}).get("value")
+            options.append({"option_id": option["option_id"], "cells": cells, "currency": currency})
+        out.append(
+            {
+                **payload,
+                "seq": event.seq,
+                "file_name": names.get(payload["attachment_id"], ""),
+                "rows": options,
+            }
+        )
+    return out
+
+
+def _confirmed_options(form: Any, drafted: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The offers purchasing kept, as it confirmed or corrected them."""
+    options = []
+    for option in drafted:
+        number = option["option_id"]
+        if not form.get(f"keep-{number}"):
+            continue
+        row: dict[str, Any] = {"option_id": number, "kind": str(form.get(f"{number}.kind") or "").strip()}
+        for key in ("quantity", "unit_price", "surcharge_pct", "surcharge_amount", "freight_amount"):
+            value = _float(str(form.get(f"{number}.{key}") or ""))
+            if value is not None:
+                row[key] = value
+        for key in ("ship_date", "arrival_date", "valid_until", "conditions"):
+            value = str(form.get(f"{number}.{key}") or "").strip()
+            if value:
+                row[key] = value
+        splits = str(form.get(f"{number}.split_deliveries") or "").strip()
+        if splits:
+            row["split_deliveries"] = excel.parse_splits(splits)
+        _one_surcharge(row, number)
+        try:
+            model.SupplierProposal.model_validate(row)
+        except ValidationError as error:
+            raise ValueError(f"offer {number}: {_reason(error)}") from error
+        options.append(row)
+    if not options:
+        raise ValueError("keep at least one offer")
+    return options
+
+
+def _one_surcharge(row: dict[str, Any], number: int) -> None:
+    """A proposal has its surcharge as a percentage or as an amount: a zero next to the other is dropped
+    (a quote saying "surcharge: none" reads as 0 % and 0.00); two non-zero values are purchasing's call."""
+    pct, amount = row.get("surcharge_pct"), row.get("surcharge_amount")
+    if pct is None or amount is None:
+        return
+    if amount == 0:
+        row.pop("surcharge_amount")
+    elif pct == 0:
+        row.pop("surcharge_pct")
+    else:
+        raise ValueError(f"offer {number}: keep the surcharge as a percentage or as an amount, not both")
+
+
+def _reason(error: ValidationError) -> str:
+    """The first problem of a validation error in plain words: the field and what is wrong with it."""
+    first = error.errors()[0]
+    field = ".".join(str(part) for part in first.get("loc", ()))
+    message = str(first.get("msg", "invalid")).removeprefix("Value error, ")
+    return f"{field}: {message}" if field else message
 
 
 def _entered_option(form: Any, option_id: int) -> dict[str, Any] | None:

@@ -17,7 +17,7 @@ from snm_data.ddl import schema_ddl, table_ddl_if_absent, tag_statements
 from .planning import DatabricksPlanningData, LocalPlanningData
 from .server import REPO_ROOT, default_planning_dir
 from .service import Actor, CaseError, CaseService
-from .store import ATTACHMENT_VOLUME, DatabricksCaseStore, LocalCaseStore
+from .store import ATTACHMENT_VOLUME, RUNS_VOLUME, DatabricksCaseStore, LocalCaseStore
 
 CONTRACTS = REPO_ROOT / "data_contracts"
 HUMAN_ACTIONS = (
@@ -40,7 +40,7 @@ def case_tables(registry: ContractRegistry) -> list:
 
 def deploy_statements(registry: ContractRegistry, catalog: str) -> list[str]:
     """Create the ``cases`` schema, its append-only tables if they do not exist (never replaced), and the
-    attachments volume (decision record 005)."""
+    attachments volume (decision record 005), and the volume for the deployed pages' run records."""
     statements = [schema_ddl(catalog, "cases")]
     for contract in case_tables(registry):
         statements.append(table_ddl_if_absent(contract, catalog))
@@ -48,6 +48,7 @@ def deploy_statements(registry: ContractRegistry, catalog: str) -> list[str]:
         statements.append(f"ALTER TABLE {name} SET TBLPROPERTIES ('delta.appendOnly' = 'true')")
         statements += tag_statements(contract, catalog)
     statements.append(f"CREATE VOLUME IF NOT EXISTS `{catalog}`.`cases`.`{ATTACHMENT_VOLUME}`")
+    statements.append(f"CREATE VOLUME IF NOT EXISTS `{catalog}`.`cases`.`{RUNS_VOLUME}`")
     return statements
 
 
@@ -135,8 +136,8 @@ def main(argv: list[str] | None = None) -> int:
             for statement in added:
                 cursor.execute(statement)
         print(
-            f"deployed {len(case_tables(registry))} case tables (append-only), the attachments volume, "
-            f"{len(added)} added column set(s)"
+            f"deployed {len(case_tables(registry))} case tables (append-only), the attachments and runs "
+            f"volumes, {len(added)} added column set(s)"
         )
         return 0
 

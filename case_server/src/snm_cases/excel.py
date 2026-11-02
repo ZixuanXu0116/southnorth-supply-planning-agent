@@ -130,6 +130,24 @@ def _explain(error: ValidationError) -> str:
     return f"{column}: {message}" if column else message
 
 
+def is_request_sheet(content: bytes) -> bool:
+    """Whether a workbook is the request sheet this system attached (the deterministic path); any other
+    workbook is a supplier's own document and goes to the extractor (snm_cases.documents)."""
+    try:
+        book = load_workbook(io.BytesIO(content), data_only=True, read_only=True)
+    except Exception:
+        return False
+    if SHEET not in book.sheetnames:
+        return False
+    first = [row for row in book[SHEET].iter_rows(min_row=1, max_row=2, max_col=1, values_only=True)]
+    return len(first) == 2 and str(first[0][0]).strip() == "Company" and str(first[1][0]).strip() == "Request"
+
+
+def parse_splits(value: Any) -> list[dict[str, Any]]:
+    """``3@2026-11-20; 2@2026-12-04`` as split deliveries (raises ValueError on another form)."""
+    return _splits(value)
+
+
 def parse_reply(content: bytes, case_id: str) -> tuple[list[dict[str, Any]], list[str]]:
     """Options from a returned sheet, as ``SupplierProposal`` dictionaries, and the problems found (cell and
     message). Rows with no value besides the option number are skipped; nothing is returned when the sheet

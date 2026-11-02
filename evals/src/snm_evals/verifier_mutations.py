@@ -8,7 +8,9 @@ mutated copies built from the same evaluations, each with exactly one defect:
 - ``mandate_claim``: a proposal that misses mandate fields recommended as "inside the mandate";
 - ``cheapest_claim``: the dearest proposal recommended as the lowest expected total cost;
 - ``target_claim``: a proposal that misses its service target recommended as meeting it;
-- ``omission``: a proposal that misses mandate fields recommended without saying so.
+- ``omission``: a proposal that misses mandate fields recommended without saying so;
+- ``overclaim``: the recommended option called better than another on every figure, though it is worse on one;
+- ``wrong_difference``: the gap between two options' expected total costs misstated by 25 USD.
 
 Every mutation should fail. A fail on an original is a false alarm unless its discrepancy is real, so the
 report lists those for a person to read. All figures in the claims are the evaluated ones, so only the claims
@@ -36,7 +38,9 @@ from .run import HARNESS
 
 VERIFY_CLI = HARNESS / "dist" / "cli" / "verify.js"
 PLANNER = Actor("planner_agent", "purchasing")
-MUTATIONS = ("figure", "mandate_claim", "cheapest_claim", "target_claim", "omission")
+MUTATIONS = (
+    "figure", "mandate_claim", "cheapest_claim", "target_claim", "omission", "overclaim", "wrong_difference",
+)  # fmt: skip
 
 
 def _short(option: str) -> str:
@@ -99,7 +103,51 @@ def mutations(rec: dict[str, Any], ranking: dict[str, Any]) -> dict[str, dict[st
             f"Recommend {label(row)}: its stock-out risk of {row.get('stockout_risk')} meets the service "
             f"target, at an expected total cost of {_total(row)} USD.",
         )
+    # Comparisons (planner-evaluate-v6-v5: the defect v6 still writes): the planner's own recommended option
+    # against another proposal.
+    rows = proposals + [
+        row for row in ranking.get("reference", []) if row.get("option") == rec["recommended"]
+    ]
+    chosen = next((row for row in rows if row["option"] == rec["recommended"]), None)
+    others = [row for row in proposals if chosen is not None and row["option"] != chosen["option"]]
+    if chosen is not None:
+        worse = next((row for row in others if _worse_somewhere(chosen, row)), None)
+        if worse is not None:
+            name = _short(str(worse["option"]))
+            out["overclaim"] = {
+                **rec,
+                "rationale_text": f"Recommend {label(chosen)}: it is better than {name} on every figure, at "
+                f"an expected total cost of {_total(chosen)} USD.",
+            }
+        priced_other = next((row for row in others if _total(row) is not None), None)
+        if priced_other is not None and _total(chosen) is not None:
+            mine, theirs = _total(chosen) or 0.0, _total(priced_other) or 0.0
+            gap = abs(mine - theirs) + 25.0
+            direction = "lower" if mine < theirs else "higher"
+            name = _short(str(priced_other["option"]))
+            out["wrong_difference"] = {
+                **rec,
+                "rationale_text": f"Recommend {label(chosen)}: its expected total cost of {mine} USD is "
+                f"{gap:.2f} USD {direction} than {name}'s {theirs} USD.",
+            }
     return out
+
+
+def _risk(row: dict[str, Any]) -> float | None:
+    value = row.get("stockout_risk")
+    return float(str(value).rstrip("%")) if value not in (None, "") else None
+
+
+def _worse_somewhere(row: dict[str, Any], other: dict[str, Any]) -> bool:
+    """True when ``row`` is worse than ``other`` on its expected total cost, risk, or coverage date."""
+    mine, theirs = _total(row), _total(other)
+    if mine is not None and theirs is not None and mine > theirs:
+        return True
+    risk, other_risk = _risk(row), _risk(other)
+    if risk is not None and other_risk is not None and risk > other_risk:
+        return True
+    covers, other_covers = row.get("coverage_date"), other.get("coverage_date")
+    return bool(covers and other_covers and str(covers) > str(other_covers))
 
 
 def run_verify(
@@ -122,9 +170,52 @@ def run_verify(
         "verdict": verdict,
         "discrepancies": (result.get("verdict") or {}).get("discrepancies", []),
         "untraced_figures": result.get("untraced_figures", []),
+        "findings": result.get("findings"),
         "cost_usd": round((result.get("usage") or {}).get("cost_usd", 0.0), 4),
         "error": result.get("error"),
     }
+
+
+def run_on_store(
+    store: Path,
+    planning_dir: Path,
+    cost_parameter: Path,
+    out_dir: Path,
+    names: list[str],
+    parallel: int = 3,
+    max_usd: float = 2.0,
+) -> list[dict[str, Any]]:
+    """The named mutations of the recommendations a batch already wrote (one per case in ``store``),
+    checked by the verifier; no planner run is spent."""
+    from .verifier_form import PLANNER_ACTOR, final_recommendation
+
+    if out_dir.exists():
+        shutil.rmtree(out_dir)
+    work = out_dir / "recommendations"
+    work.mkdir(parents=True)
+    service = CaseService(LocalCaseStore(store), LocalPlanningData(planning_dir, cost_parameter))
+    jobs: list[tuple[str, str, dict[str, Any]]] = []
+    for view in service.all_views():
+        rec, _ = final_recommendation(service, view.case_id)
+        if rec is None:
+            continue
+        variants = mutations(rec, service.rank_options(PLANNER_ACTOR, view.case_id))
+        jobs += [(view.case_id, name, variants[name]) for name in names if name in variants]
+    rows: list[dict[str, Any]] = []
+    spent = 0.0
+    with ThreadPoolExecutor(max_workers=parallel) as pool:
+        pending = [pool.submit(run_verify, c, n, r, store, planning_dir, work) for c, n, r in jobs]
+        for future in pending:
+            row = future.result()
+            spent += row["cost_usd"]
+            rows.append(row)
+            if spent >= max_usd:
+                for other in pending:
+                    other.cancel()
+                break
+    (out_dir / "results.jsonl").write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+    (out_dir / "spent.json").write_text(json.dumps({"usd": round(spent, 4)}), encoding="utf-8")
+    return rows
 
 
 def run_mutation_suite(

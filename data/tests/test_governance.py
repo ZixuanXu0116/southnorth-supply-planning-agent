@@ -46,9 +46,10 @@ def test_operator_identities_are_masked_for_roles_without_people_level_access() 
 def test_commercial_values_are_masked_for_roles_without_cost_access(registry) -> None:
     sql = g.commercial_mask_function("snm", "DECIMAL(15,2)")
     assert "`commercial_amount_mask`(value DECIMAL(15,2))" in sql and "RETURNS DECIMAL(15,2)" in sql
-    assert "CASE WHEN is_member('admins') THEN value END" in sql  # purchasing is not provisioned yet
+    # The case writer (the deployed app's identity) prices options; purchasing is not provisioned yet.
+    assert "CASE WHEN is_member('admins') OR is_member('snm_case_writer') THEN value END" in sql
     assert g.ROLES["purchasing"].cost_access and not g.ROLES["purchasing"].provisioned
-    assert not any(role.cost_access for role in g.provisioned_roles())
+    assert [role.name for role in g.provisioned_roles() if role.cost_access] == ["case_writer"]
     statements = g.table_policy_statements(registry["raw_ext.supplier_condition"], "snm")
     assert statements == [
         "ALTER TABLE `snm`.`raw_ext`.`supplier_condition` ALTER COLUMN `surcharge_pct_lt7` "
@@ -87,7 +88,14 @@ def test_grants_mirror_contract_access(registry) -> None:
     assert ("app-ops_analyst_global", "snm.raw_ext.workforce_roster") not in tables
     assert not any(securable.startswith("snm.eval") for _, _, securable, _ in grants)
     assert ("app-site_manager_rr", "CATALOG", "snm", "USE CATALOG") in grants
-    assert {privilege for *_, privilege in grants} == {"USE CATALOG", "USE SCHEMA", "SELECT"}
+    assert {privilege for *_, privilege in grants} == {"USE CATALOG", "USE SCHEMA", "SELECT", "MODIFY"}
+    # Only the case writer writes, and only to the case store; it reads the planning tables it prices from.
+    modify = {(grantee, securable) for grantee, _, securable, privilege in grants if privilege == "MODIFY"}
+    case_tables = ("case_event", "supplier_message", "supplier_proposal", "supplier_attachment")
+    assert modify == {("app-case_writer", f"snm.cases.{name}") for name in case_tables}
+    for table in ("curated.replenishment_case", "curated.supply_position", "curated.supplier_profile",
+                  "raw_ext.cost_parameter"):  # fmt: skip
+        assert ("app-case_writer", f"snm.{table}") in tables
     # Roles without a principal get nothing.
     assert g.desired_grants(registry, "snm", {}) == set()
 
@@ -142,3 +150,65 @@ def test_oauth_settings_need_no_token_and_hide_the_secret() -> None:
         DatabricksSettings.from_env(
             {"DATABRICKS_HOST": "h", "DATABRICKS_WAREHOUSE_ID": "w", "DATABRICKS_CLIENT_ID": "client"}
         )
+
+
+class _Principal:
+    def __init__(self, sp_id: str, application_id: str, display_name: str):
+        self.id, self.application_id, self.display_name = sp_id, application_id, display_name
+
+
+class _Group:
+    def __init__(self, display_name: str):
+        self.id, self.display_name, self.members = f"g-{display_name}", display_name, []
+
+
+class _FakeClient:
+    """The few SCIM and warehouse calls ``ensure_identities`` makes."""
+
+    def __init__(self, principals):
+        self.principals, self.groups_made, self.created = principals, {}, []
+        client = self
+
+        class ServicePrincipals:
+            def list(self):
+                return list(client.principals)
+
+            def create(self, display_name, active, entitlements):
+                principal = _Principal(f"sp-{display_name}", f"app-{display_name}", display_name)
+                client.principals.append(principal)
+                client.created.append(display_name)
+                return principal
+
+        class Groups:
+            def list(self, attributes):
+                return list(client.groups_made.values())
+
+            def create(self, display_name, members):
+                group = _Group(display_name)
+                group.members = members
+                client.groups_made[display_name] = group
+
+        class Warehouses:
+            def update_permissions(self, warehouse_id, access_control_list):
+                client.warehouse_acl = [entry.group_name for entry in access_control_list]
+
+        self.service_principals, self.groups, self.warehouses = ServicePrincipals(), Groups(), Warehouses()
+
+
+def test_a_role_can_use_an_existing_principal_named_in_the_environment(monkeypatch) -> None:
+    # Decision record 010: the case writer is the deployed app's own service principal.
+    app_sp = _Principal("sp-app", "app-uuid-1", "app-snm-cases")
+    client = _FakeClient([app_sp])
+    monkeypatch.setenv("SNM_PRINCIPAL_CASE_WRITER", "app-uuid-1")
+    assert g.principal_override(g.ROLES["case_writer"]) == "app-uuid-1"
+    assert g.principal_override(g.ROLES["ops_analyst_global"]) is None
+    g.ensure_identities(client, "wh", g.GovernReport(), log=lambda _: None)
+    assert "snm-agent-case-writer" not in client.created  # no principal of its own
+    assert "snm-agent-ops-analyst-global" in client.created
+    case_writer_group = client.groups_made["snm_case_writer"]
+    assert [member.value for member in case_writer_group.members] == ["sp-app"]
+    assert "snm_case_writer" in client.warehouse_acl
+    assert g.role_principals(client)["case_writer"] == "app-uuid-1"
+    monkeypatch.setenv("SNM_PRINCIPAL_CASE_WRITER", "no-such-app")
+    with pytest.raises(ValueError, match="no service principal"):
+        g.ensure_identities(_FakeClient([]), "wh", g.GovernReport(), log=lambda _: None)

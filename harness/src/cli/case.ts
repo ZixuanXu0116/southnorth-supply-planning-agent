@@ -8,8 +8,9 @@
  */
 import { join } from "node:path";
 import { parseArgs } from "node:util";
-import { loadConfigFromEnv, readApiKey } from "../config.js";
+import { loadConfigFromEnv, plannerModelFor, readApiKey } from "../config.js";
 import { PLANNER_PROMPT_VERSION, PLANNER_PROMPT_VERSIONS, type PlannerPromptVersion, type PlannerTask, runCaseTask } from "../agent/planner.js";
+import { VERIFY_FORMS, type VerifyForm } from "../agent/checks.js";
 import { DEFAULT_RUNS_DIR } from "../agent/runner.js";
 
 const TASKS: readonly PlannerTask[] = ["prepare", "evaluate", "handoff"];
@@ -28,6 +29,8 @@ async function main(): Promise<number> {
 			// off, triggered (departs from purchasing's order, misses its service target, or high value), or always
 			verify: { type: "string", default: "off" },
 			"verify-value-usd": { type: "string", default: "10000" },
+			// how: subagent (the verifier), deterministic (code only), or self_check (a tool and a skill)
+			"verify-form": { type: "string", default: "subagent" },
 			json: { type: "boolean", default: false },
 		},
 	});
@@ -40,13 +43,15 @@ async function main(): Promise<number> {
 	}
 	const verifyMode = values.verify;
 	if (!["off", "triggered", "always"].includes(verifyMode)) throw new Error("--verify must be off, triggered, or always.");
+	const verifyForm = values["verify-form"] as VerifyForm;
+	if (!VERIFY_FORMS.includes(verifyForm)) throw new Error(`--verify-form must be one of ${VERIFY_FORMS.join(", ")}.`);
 	const config = loadConfigFromEnv();
 	const result = await runCaseTask({
 		caseId: values.case,
 		task,
 		role: values.role,
 		asOf: values["as-of"],
-		model: config.models.main,
+		model: plannerModelFor(config.models.main, task),
 		budgets: config.budgets,
 		apiKey: readApiKey(),
 		runsDir: values["runs-dir"],
@@ -58,6 +63,7 @@ async function main(): Promise<number> {
 						model: config.models.verifier,
 						mode: verifyMode as "triggered" | "always",
 						valueThresholdUsd: Number(values["verify-value-usd"]),
+						form: verifyForm,
 					},
 				}),
 		...(values.store ? { storeDir: values.store } : {}),

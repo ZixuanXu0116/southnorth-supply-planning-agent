@@ -1,0 +1,86 @@
+# One server per container (decision record 010). From the repository root:
+#
+#   uv run python deploy/make_env.py          # writes deploy/env/*.env from your environment (git-ignored)
+#   docker compose -f deploy/compose.yaml up --build
+#
+# Then the case pages are at http://127.0.0.1:8000 and the question page at http://127.0.0.1:8001.
+#
+# Who holds what:
+#   tool-server-ops  the ops_analyst_global service principal (read-only grants); reaches Databricks only
+#   case-server      the case store volume; no network beyond the internal one, no credentials
+#   web, ask         the Anthropic key and the service token of the server they call; no database credentials
+# The harness runs inside web and ask (as the pages' subprocess) and reaches the servers by service name.
+
+name: snm
+
+services:
+  tool-server-ops:
+    build: { context: .., dockerfile: deploy/Dockerfile, target: tool-server }
+    image: snm/tool-server:dev
+    env_file: env/tool-server-ops.env
+    environment:
+      SNM_ROLE: ops_analyst_global
+      SNM_ALLOWED_HOSTS: tool-server-ops:*
+      SNM_AUDIT_DIR: /data/audit
+    volumes:
+      - tool-audit:/data/audit
+    networks: [internal, egress]
+    restart: unless-stopped
+
+  case-server:
+    build: { context: .., dockerfile: deploy/Dockerfile, target: case-server }
+    image: snm/case-server:dev
+    env_file: env/case-server.env
+    environment:
+      SNM_PLANNER_ROLES: purchasing
+      SNM_ALLOWED_HOSTS: case-server:*
+    volumes:
+      - cases:/data/cases
+      - ${SNM_PLANNING_RUN:-../out/planning/2026-09-21}:/data/planning:ro
+      - ${SNM_COST_PARAMETER_FILE:-../out/small/raw_ext/cost_parameter.parquet}:/data/cost_parameter.parquet:ro
+    networks: [internal]
+    restart: unless-stopped
+
+  web:
+    build: { context: .., dockerfile: deploy/Dockerfile, target: app }
+    image: snm/app:dev
+    env_file: env/web.env
+    environment:
+      SNM_CASE_SERVER_URL: http://case-server:8000/mcp
+      SNM_COST_PARAMETER: /data/cost_parameter.parquet
+    volumes:
+      # The pages record people's actions in the same store (the case server writes the agents' events).
+      - cases:/data/cases
+      - runs:/data/runs
+      - ${SNM_PLANNING_RUN:-../out/planning/2026-09-21}:/data/planning:ro
+      - ${SNM_COST_PARAMETER_FILE:-../out/small/raw_ext/cost_parameter.parquet}:/data/cost_parameter.parquet:ro
+    ports: ["127.0.0.1:8000:8000"]
+    networks: [internal, egress]
+    depends_on:
+      case-server: { condition: service_healthy }
+    restart: unless-stopped
+
+  ask:
+    image: snm/app:dev
+    command: ["snm-ask", "serve", "--host", "0.0.0.0", "--port", "8001", "--runs", "/data/runs/ask"]
+    env_file: env/ask.env
+    environment:
+      SNM_TOOL_SERVER_URL_OPS_ANALYST_GLOBAL: http://tool-server-ops:8000/mcp
+    volumes:
+      - runs:/data/runs
+    ports: ["127.0.0.1:8001:8001"]
+    networks: [internal, egress]
+    depends_on:
+      tool-server-ops: { condition: service_healthy }
+      web: { condition: service_started }
+    restart: unless-stopped
+
+networks:
+  internal:
+    internal: true # no route out: the case server has no internet at all
+  egress: {}
+
+volumes:
+  cases: {}
+  runs: {}
+  tool-audit: {}

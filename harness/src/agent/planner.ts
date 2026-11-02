@@ -15,11 +15,23 @@ import type { Api, AssistantMessage, Model } from "@earendil-works/pi-ai";
 import { streamSimple } from "@earendil-works/pi-ai/compat";
 import type { Budget, ModelRole } from "../config.js";
 import { caseServerLaunch } from "../mcp/case-server.js";
-import { McpToolBridge, McpToolError } from "../mcp/bridge.js";
-import type { ToolServerLaunch } from "../mcp/tool-server.js";
+import { McpToolBridge, McpToolError, type ServerEndpoint } from "../mcp/bridge.js";
+import { remoteCaseServer } from "../mcp/remote.js";
 import { resolveModel } from "../models.js";
 import { createKbTools } from "./kb-tools.js";
 import { buildManifest, type RunManifest } from "./manifest.js";
+import {
+	aloneReason,
+	canonical,
+	createCheckTool,
+	deterministicRefusal,
+	factsFindings,
+	hasFindings,
+	SELF_CHECK_REFUSAL,
+	selfCheckResult,
+	type VerifyForm,
+	writeBlockReason,
+} from "./checks.js";
 import { renderPrompt } from "./prompts.js";
 import { increment, newRunId, payloadOf, textOf, thinkingOf, type UsageTotals } from "./runner.js";
 import { clip, TraceWriter } from "./trace.js";
@@ -35,9 +47,10 @@ import {
 } from "./verifier.js";
 
 export type PlannerTask = "prepare" | "evaluate" | "handoff";
-export const PLANNER_PROMPT_VERSION = "v5";
+/** v6 adopted 2026-11-01 (change card change-20261030-planner-recommendation-facts). */
+export const PLANNER_PROMPT_VERSION = "v6";
 /** Versions that can be run (paired measurement of a candidate against the current one). */
-export const PLANNER_PROMPT_VERSIONS = ["v3", "v4", "v5"] as const;
+export const PLANNER_PROMPT_VERSIONS = ["v3", "v4", "v5", "v6"] as const;
 export type PlannerPromptVersion = (typeof PLANNER_PROMPT_VERSIONS)[number];
 
 const READ_TOOLS = ["list_cases", "get_case", "explain_case", "evaluate_option"] as const;
@@ -84,6 +97,16 @@ const TASK_INSTRUCTIONS_V5: Record<PlannerTask, string> = {
 		"cost and expected total cost when your role sees costs).",
 };
 
+/** v6 (change card change-20261030-planner-recommendation-facts, adopted 2026-11-01): v5 plus three sentences. */
+export const V6_EVALUATE_SENTENCES =
+	"Say whether the recommended option meets its service target. Name each option with its own id and " +
+	"evaluation_id. Compare options figure by figure: never call one better on every figure when any of its " +
+	"figures is worse.";
+const TASK_INSTRUCTIONS_V6: Record<PlannerTask, string> = {
+	...TASK_INSTRUCTIONS_V5,
+	evaluate: `${TASK_INSTRUCTIONS_V5.evaluate} ${V6_EVALUATE_SENTENCES}`,
+};
+
 /** The task instructions and read tools of a prompt version. */
 export function plannerProfile(version: PlannerPromptVersion): {
 	instructions: Record<PlannerTask, string>;
@@ -91,7 +114,8 @@ export function plannerProfile(version: PlannerPromptVersion): {
 } {
 	if (version === "v3") return { instructions: TASK_INSTRUCTIONS, readTools: READ_TOOLS };
 	if (version === "v4") return { instructions: TASK_INSTRUCTIONS_V4, readTools: READ_TOOLS_V4 };
-	return { instructions: TASK_INSTRUCTIONS_V5, readTools: READ_TOOLS_V4 };
+	if (version === "v5") return { instructions: TASK_INSTRUCTIONS_V5, readTools: READ_TOOLS_V4 };
+	return { instructions: TASK_INSTRUCTIONS_V6, readTools: READ_TOOLS_V4 };
 }
 
 export interface PlannerRunOptions {
@@ -112,6 +136,8 @@ export interface PlannerRunOptions {
 		mode: "triggered" | "always";
 		/** A case at or above this value always gets the verifier. */
 		valueThresholdUsd: number;
+		/** How the recommendation is checked (change card change-20261101-verifier-form); default subagent. */
+		form?: VerifyForm;
 		streamFn?: StreamFn;
 		resolvedModel?: Model<Api>;
 	};
@@ -120,7 +146,7 @@ export interface PlannerRunOptions {
 	/** Test hooks. */
 	streamFn?: StreamFn;
 	resolvedModel?: Model<Api>;
-	caseServer?: ToolServerLaunch;
+	caseServer?: ServerEndpoint;
 }
 
 export interface PlannerResult {
@@ -131,6 +157,8 @@ export interface PlannerResult {
 	status: "written" | "no_write" | "budget_exhausted" | "error";
 	written?: { tool: string; event: Record<string, unknown> };
 	refused_writes: { tool: string; error: string }[];
+	/** Proposals refused because the self-check was skipped (arm C); not counted as refused writes. */
+	protocol_refusals?: number;
 	/** One report per propose_recommendation the verifier saw (skipped ones included). */
 	verifications?: VerificationReport[];
 	final_text?: string;
@@ -166,6 +194,12 @@ export async function runCaseTask(options: PlannerRunOptions): Promise<PlannerRe
 	const toolErrors: Record<string, number> = {};
 	const refused: { tool: string; error: string }[] = [];
 	const verifications: VerificationReport[] = [];
+	const form: VerifyForm = options.verify?.form ?? "subagent";
+	/** Drafts the planner checked with check_recommendation (arm C), as canonical JSON. */
+	const checkedDrafts = new Set<string>();
+	/** Tool calls refused for a skipped self-check. */
+	const protocolBlocks = new Set<string>();
+	let protocolRefusals = 0;
 	let written: PlannerResult["written"];
 	let turns = 0;
 	let lastText = "";
@@ -179,6 +213,7 @@ export async function runCaseTask(options: PlannerRunOptions): Promise<PlannerRe
 		status,
 		...(written ? { written } : {}),
 		refused_writes: refused,
+		...(protocolRefusals ? { protocol_refusals: protocolRefusals } : {}),
 		...(options.verify ? { verifications } : {}),
 		...(lastText ? { final_text: lastText } : {}),
 		...(error ? { error } : {}),
@@ -200,8 +235,10 @@ export async function runCaseTask(options: PlannerRunOptions): Promise<PlannerRe
 
 	let bridge: McpToolBridge | undefined;
 	try {
+		// A case server in its own container (decision record 010) uses its own store and planning run.
 		bridge = await McpToolBridge.connect(
 			options.caseServer ??
+				remoteCaseServer(options.role, runId) ??
 				caseServerLaunch({
 					profile: "planner",
 					role: options.role,
@@ -213,7 +250,6 @@ export async function runCaseTask(options: PlannerRunOptions): Promise<PlannerRe
 		);
 		const allowed = new Set<string>([...profile.readTools, ...writeTools]);
 		const caseTools = bridge.tools.filter((tool) => allowed.has(tool.name));
-		const tools: AgentTool[] = [...createKbTools(), ...(caseTools as AgentTool[])];
 		const connected = bridge;
 		// Reads the case for the verifier; these calls never enter the planner's transcript.
 		const read = async (name: string): Promise<Record<string, unknown>> => {
@@ -221,6 +257,66 @@ export async function runCaseTask(options: PlannerRunOptions): Promise<PlannerRe
 			if (!tool) throw new Error(`The case server has no ${name}.`);
 			return payloadOf(await tool.execute(`verifier-${name}`, { case_id: options.caseId })) ?? {};
 		};
+		const context = async (recommendation: Pick<Recommendation, "recommended">) => {
+			const settings = options.verify;
+			const facts = caseFacts(await read("get_case"));
+			const ranking = (await read("rank_options")) as unknown as Ranking;
+			const triggered = settings
+				? triggersFor(recommendation, ranking, facts, {
+						valueThresholdUsd: settings.valueThresholdUsd,
+						always: settings.mode === "always",
+					})
+				: [];
+			return { facts, ranking, triggered };
+		};
+		// Arm B: code only; a finding refuses the write.
+		const checkDeterministic = async (recommendation: Recommendation): Promise<VerificationReport> => {
+			try {
+				const { facts, ranking, triggered } = await context(recommendation);
+				const findings = factsFindings(recommendation, ranking, facts);
+				if (triggered.length === 0) {
+					return { status: "skipped", form, triggered_by: [], untraced_figures: findings.untraced_figures, findings };
+				}
+				const fail = hasFindings(findings);
+				return {
+					status: "verified",
+					form,
+					triggered_by: triggered,
+					untraced_figures: findings.untraced_figures,
+					findings,
+					verdict: {
+						verdict: fail ? "fail" : "pass",
+						discrepancies: fail ? [{ claim: "deterministic check", evidence: deterministicRefusal(findings) }] : [],
+						summary: fail ? "The deterministic check found a problem." : "The deterministic check found no problem.",
+					},
+				};
+			} catch (error) {
+				const message = error instanceof Error ? error.message : String(error);
+				return { status: "error", form, triggered_by: [], untraced_figures: [], error: message };
+			}
+		};
+		const tools: AgentTool[] = [...createKbTools(), ...(caseTools as AgentTool[])];
+		// Arm C: the self-check tool, offered with the write it checks.
+		const proposeTool = caseTools.find((tool) => tool.name === "propose_recommendation");
+		if (options.verify && form === "self_check" && proposeTool) {
+			tools.push(
+				createCheckTool(proposeTool.parameters, async (draft) => {
+					const { facts, ranking, triggered } = await context(draft);
+					const result = selfCheckResult(draft, ranking, facts);
+					checkedDrafts.add(canonical(draft));
+					const report: VerificationReport = {
+						status: "checked",
+						form,
+						triggered_by: triggered,
+						untraced_figures: result.untraced_figures,
+						findings: factsFindings(draft, ranking, facts),
+					};
+					verifications.push(report);
+					trace.write("verification", { ...report });
+					return result;
+				}),
+			);
+		}
 		const verify = async (recommendation: Recommendation): Promise<VerificationReport> => {
 			const settings = options.verify;
 			if (!settings) return { status: "skipped", triggered_by: [], untraced_figures: [] };
@@ -273,17 +369,40 @@ export async function runCaseTask(options: PlannerRunOptions): Promise<PlannerRe
 			getApiKey: () => options.apiKey,
 			sessionId: runId,
 			initialState: { systemPrompt: prompt.text, model, thinkingLevel: options.model.effort, tools },
-			beforeToolCall: async ({ toolCall }) => {
-				if (written) return { block: true, reason: "The case event for this task is written; stop now." };
-				if (writeTools.has(toolCall.name) && refused.length >= 2) {
-					return { block: true, reason: "Two writes were refused; record the blocker with add_note." };
+			beforeToolCall: async ({ toolCall, assistantMessage }) => {
+				const blocked = writeBlockReason(toolCall.name, writeTools, {
+					written: written !== undefined,
+					refused: refused.length,
+				});
+				if (blocked) return { block: true, reason: blocked };
+				// A write comes alone: refused (not counted as a refused write) when the turn has other calls.
+				const calls = assistantMessage.content.filter((block) => block.type === "toolCall").map((block) => (block as { name: string }).name);
+				const alone = aloneReason(toolCall.name, writeTools, calls);
+				if (alone) {
+					protocolBlocks.add(toolCall.id);
+					return { block: true, reason: alone };
 				}
-				if (
-					options.verify &&
-					toolCall.name === "propose_recommendation" &&
-					verifications.length < options.budgets.maxSubAgentsPerRun
-				) {
-					const report = await verify(toolCall.arguments as unknown as Recommendation);
+				if (!options.verify || toolCall.name !== "propose_recommendation") return undefined;
+				const draft = toolCall.arguments as unknown as Recommendation;
+				if (form === "self_check") {
+					if (checkedDrafts.has(canonical(draft))) return undefined;
+					const { triggered } = await context(draft).catch(() => ({ triggered: ["error"] }));
+					if (triggered.length === 0) return undefined;
+					protocolBlocks.add(toolCall.id);
+					trace.write("verification", { status: "refused", form, reason: "draft not checked as is" });
+					return { block: true, reason: SELF_CHECK_REFUSAL };
+				}
+				if (form === "deterministic") {
+					const report = await checkDeterministic(draft);
+					verifications.push(report);
+					trace.write("verification", { ...report });
+					if (report.verdict?.verdict === "fail" && report.findings) {
+						return { block: true, reason: deterministicRefusal(report.findings) };
+					}
+					return undefined;
+				}
+				if (verifications.length < options.budgets.maxSubAgentsPerRun) {
+					const report: VerificationReport = { ...(await verify(draft)), form };
 					verifications.push(report);
 					trace.write("verification", { ...report });
 					if (report.verdict?.verdict === "fail") return { block: true, reason: refusalMessage(report.verdict) };
@@ -328,7 +447,8 @@ export async function runCaseTask(options: PlannerRunOptions): Promise<PlannerRe
 				const content = (event.result?.content ?? []) as { type: string; text?: string }[];
 				const output = content.map((block) => block.text ?? "").join("\n");
 				if (writeTools.has(event.toolName)) {
-					if (event.isError) refused.push({ tool: event.toolName, error: clip(output, 500) });
+					if (event.isError && protocolBlocks.has(event.toolCallId)) protocolRefusals += 1;
+					else if (event.isError) refused.push({ tool: event.toolName, error: clip(output, 500) });
 					else written = { tool: event.toolName, event: payloadOf(event.result) ?? {} };
 				}
 				trace.write("tool", { id: event.toolCallId, name: event.toolName, is_error: event.isError, output: clip(output) });

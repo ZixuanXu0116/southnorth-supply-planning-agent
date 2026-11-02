@@ -130,6 +130,22 @@ def _cmd_build(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_shift(args: argparse.Namespace) -> int:
+    from datetime import UTC, date, datetime
+
+    from .planning.shift import shift_lakehouse, shift_local
+
+    to = date.fromisoformat(args.to) if args.to else datetime.now(UTC).date()
+    if args.local:
+        print(f"wrote {shift_local(args.local, to)}")
+        return 0
+    from .databricks import DatabricksSettings
+
+    result = shift_lakehouse(DatabricksSettings.from_env(), ContractRegistry.load(args.contracts), to)
+    print(f"moved by {result['days']} days: {result['rows']}; now run: uv run snm-cases --databricks sync")
+    return 0
+
+
 def _cmd_plan(args: argparse.Namespace) -> int:
     from datetime import date
 
@@ -313,6 +329,14 @@ def main(argv: list[str] | None = None) -> int:
         "--from-profile", help="offline: read inputs from a generated profile under --out, not Databricks"
     )
     plan.set_defaults(func=_cmd_plan)
+
+    shift = commands.add_parser(
+        "shift-dates",
+        help="move the planning run's dates to today (the lakehouse's published run, or a local one)",
+    )
+    shift.add_argument("--to", help="the day to move to (YYYY-MM-DD); default today (UTC)")
+    shift.add_argument("--local", type=Path, help="a local planning run (out/planning/<as-of>) instead")
+    shift.set_defaults(func=_cmd_shift)
 
     replay = commands.add_parser(
         "replay", help="run the engine on past days of a generated profile and score it against what followed"

@@ -27,10 +27,22 @@ jobs:
           uv sync --frozen
           npm ci
       - name: Lint (packages and tests; evals/analysis holds one-off scripts)
-        run: uv run --frozen ruff check apps case_server data evals/src evals/tests tool_server
+        run: uv run --frozen ruff check apps case_server data deploy evals/src evals/tests tool_server
       - name: Python tests
         run: uv run --frozen pytest
       - name: TypeScript typecheck and tests
         run: |
           npm run typecheck
           npm test
+
+  images:
+    # The three images of decision record 010 build from the repository alone (no secrets, nothing pushed).
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the tool server, case server, and app images
+        run: |
+          for target in tool-server case-server app; do
+            docker build -f deploy/Dockerfile --target "$target" -t "snm/$target:ci" .
+          done

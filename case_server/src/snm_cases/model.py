@@ -93,6 +93,9 @@ TRANSITIONS: dict[str, Transition] = {
         {"human", "intake_agent", "system"}, {"prepared", "sent", "responded", "recommended"}, None
     ),
     "case_cancelled": _t({"human"}, OPEN, "cancelled"),
+    # A supplier's document other than the request sheet, copied into a draft by an extractor (change card
+    # change-20261102-supplier-documents); purchasing confirms it as proposals (proposal_recorded).
+    "extraction_drafted": _t({"system"}, {"sent", "responded", "recommended"}, None),
     "note_added": _t({"planner_agent", "human"}, set(STATES), None),
 }
 EVENT_TYPES = tuple(TRANSITIONS)
@@ -255,6 +258,22 @@ class SupplierProposal(Strict):
 class ProposalRecorded(Strict):
     proposal_ids: list[str]
     options: list[SupplierProposal] = Field(min_length=1)
+    # Set when purchasing confirmed an extraction draft: its event seq, the document, and the fields changed.
+    source: dict[str, Any] | None = None
+
+
+class ExtractionDrafted(Strict):
+    """A draft of a supplier document's offers: every field with its value, the document's words, and
+    whether the extractor or the code checks are unsure of it. Never a proposal until purchasing confirms."""
+
+    attachment_id: str
+    method: str  # rules, or the extractor's model
+    options: list[dict[str, Any]]
+    instructions_found: list[str] = Field(default_factory=list)
+    problems: list[str] = Field(default_factory=list)
+    checks: list[str] = Field(default_factory=list)
+    cost_usd: float = Field(default=0.0, ge=0)
+    run_id: str | None = None
 
 
 ESCALATION_REASONS = (
@@ -294,6 +313,9 @@ class RecommendationProposed(Strict):
     # roleplay-20261019), stored next to the order the planner submitted.
     ranking_rule: str | None = None
     server_ranking: list[str] | None = None
+    # The recommended option's evaluated facts in one line, written by the server (change card
+    # change-20261030-planner-recommendation-facts); absent on recommendations written before it.
+    facts_line: str | None = None
     rationale_text: str = Field(min_length=20, max_length=3000)
 
     @model_validator(mode="after")
@@ -383,6 +405,7 @@ PAYLOADS: dict[str, type[Strict]] = {
     "note_added": NoteAdded,
     "mandate_set": MandateSet,
     "attachment_recorded": AttachmentRecorded,
+    "extraction_drafted": ExtractionDrafted,
 }
 assert set(PAYLOADS) == set(TRANSITIONS)
 

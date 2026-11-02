@@ -72,6 +72,9 @@ class Evaluation:
     meets_service_target: bool | None = None
     expected_days_below_zero: float | None = None
     expected_line_down_cost: float | None = None
+    # What purchasing pays for the goods: the quantity at the offered unit price, or at the reference price
+    # for an engine option (the costs above are measured against that reference price).
+    purchase_value: float = 0.0
 
     def public(self, cost_access: bool) -> dict[str, Any]:
         out = asdict(self)
@@ -90,6 +93,7 @@ class Evaluation:
                 "holding_cost",
                 "total_cost",
                 "expected_line_down_cost",
+                "purchase_value",
             ):
                 out[key] = None
         return out
@@ -210,6 +214,7 @@ def evaluate(
         meets_service_target=risk.meets_target if risk else None,
         expected_days_below_zero=round(risk.expected_days_below_zero, 2) if risk else None,
         expected_line_down_cost=round(per_day * risk.expected_days_below_zero, 2) if risk else None,
+        purchase_value=round(line_value, 2),
     )
 
 

@@ -49,7 +49,8 @@
     <tr>{% if ranked %}<th class="num">Rank</th>{% endif %}<th>Option</th><th>Arrives</th>{% if ranked %}<th>Mandate</th>{% endif %}
         <th class="num">{{ "Stock-out risk" if risk_shown else "Days below zero" }}</th>
         <th class="num">Option cost</th><th class="num">{{ "Expected line-down" if risk_shown else "Line-down" }}</th>
-        <th class="num">{{ "Expected total" if risk_shown else "Total" }}</th></tr>
+        <th class="num">{{ "Expected total" if risk_shown else "Total" }}<span class="sub">vs. standard price</span></th>
+        <th class="num">{{ "Expected spend" if risk_shown else "Spend" }}<span class="sub">what you would pay</span></th></tr>
     {% for r in rows %}
     <tr class="{{ 'ref' if ranked and r.rank is none else '' }}{{ ' chosen' if planner_rec and r.option == planner_rec.recommended else '' }}">
       {% if ranked %}<td class="num">{{ r.rank or "" }}</td>{% endif %}
@@ -58,7 +59,7 @@
         {% else %}{{ r.option|short_id }}
           {% if r.option == recommended %} <span class="tag rec">recommended</span>{% endif %}
           {% if planner_rec and r.option == planner_rec.recommended %} <span class="tag rec">planner's choice</span>{% endif %}
-          <span class="sub">{% if r.rank is none %}engine estimate{% if r.option == e.lever %} · engine's lever{% endif %}{% else %}{{ r.kind }}{% endif %}</span>
+          <span class="sub">{% if r.rank is none %}engine estimate{% if r.option == e.lever %} · engine's lever{% endif %}{% if ranked %} · for comparison, not a choice{% endif %}{% else %}{{ r.kind }}{% endif %}</span>
         {% endif %}</td>
       <td class="nowrap">{% if r.arrivals|length > 1 %}{% for q, d in r.arrivals %}{{ q|qty }} on {{ d }}<br>{% endfor %}
         {% elif r.arrivals %}{{ r.arrivals[0][1] }}{% else %}<span class="muted">none</span>{% endif %}</td>
@@ -72,6 +73,7 @@
       <td class="num">{{ r.option_cost|money }}</td>
       <td class="num">{{ r.line_down|money }}</td>
       <td class="num"><b>{{ r.expected_total|money }}</b></td>
+      <td class="num">{{ r.expected_spend|money }}</td>
     </tr>
     {% endfor %}
   </table>
@@ -80,19 +82,21 @@
   late on arrival only{% endif %} first, then the others by fields missed.
   {% if not recommended %}None is marked recommended: every proposal misses a mandate field the rule does not price
   {%- if (e.criticality or "C") == "C" %} (anything but the arrival date alone){% endif %}; the choice is yours.{% endif %}
-  {% elif ranked %}Rank: purchasing's rule (inside the mandate first, then fewest fields missed, then cost). {% endif %}{% if risk_shown %}Stock-out risk: the chance that stock runs out before {{ e.trigger_date }}, or before the option's
+  {% elif ranked %}Rank: purchasing's rule (inside the mandate first, then fewest fields missed, then cost). {% endif %}Two totals:
+  against the standard price (ranked on; negative when an offer is cheaper than the reference price, which is a saving),
+  and the spend, what purchasing would pay (the goods at the offered price plus every cost). {% if risk_shown %}Stock-out risk: the chance that stock runs out before {{ e.trigger_date }}, or before the option's
   last part if later, when nothing else is ordered; the class {{ e.criticality or "C" }} target is at most
   {{ ((1 - model.service_target) * 100)|round|int }}%. The expected line-down weighs that risk in money.{% else %}No calibrated stock-out risk for this material (no outflow in the
   last 13 weeks); line-down is from the projection.{% endif %}</p>
   <details><summary>Cost breakdown and definitions</summary>
   <table>
-    <tr><th>Option</th><th class="num">Price difference</th><th class="num">Surcharge</th><th class="num">Freight</th>
+    <tr><th>Option</th><th class="num">Purchase value</th><th class="num">Price difference</th><th class="num">Surcharge</th><th class="num">Freight</th>
         <th class="num">Order cost</th><th class="num">Holding</th><th class="num">Option cost</th>
         <th class="num">Days below zero</th><th class="num">Line-down (projection)</th>
         {% if risk_shown %}<th class="num">Expected days below zero</th><th class="num">Expected line-down</th>{% endif %}</tr>
     {% for r in rows %}
     <tr><td title="{{ r.option }}">{{ "Do nothing" if r.option == "no_action" else r.option|short_id }}</td>
-      <td class="num">{{ r.price_difference_cost|money }}</td><td class="num">{{ r.surcharge_cost|money }}</td>
+      <td class="num">{{ r.purchase_value|money }}</td><td class="num">{{ r.price_difference_cost|money }}</td><td class="num">{{ r.surcharge_cost|money }}</td>
       <td class="num">{{ r.freight_cost|money }}</td><td class="num">{{ r.fixed_cost|money }}</td>
       <td class="num">{{ r.holding_cost|money }}</td><td class="num">{{ r.option_cost|money }}</td>
       <td class="num">{{ r.days_below_zero }}</td><td class="num">{{ r.stockout_cost|money }}</td>
@@ -102,7 +106,8 @@
   <p class="muted">Each option is priced on top of buying the quantity at the reference price{% if e.value_usd and e.gap_qty %}
   ({{ (e.value_usd / e.gap_qty)|money }} USD per piece){% endif %}: engine options from the reference price, the
   supplier's usual expedite terms, and the company's cost parameters; proposals from their own terms. Option cost =
-  price difference + surcharge + freight + order cost + holding. The projection's line-down counts the days below zero
+  price difference + surcharge + freight + order cost + holding. Spend = purchase value (the quantity at the offered
+  price) + surcharge + freight + order cost + holding + line-down. The projection's line-down counts the days below zero
   on the average forecast.{% if risk_shown %} The expected figures come from {{ "{:,}".format(2000) }} simulated demand
   paths of the material's demand model (Croston-SBA on the last 26 weeks: demand in a week with probability
   {{ (model.probability * 100)|round|int }} %, sizes as in the weeks with demand), the same paths for every option, over
@@ -182,6 +187,7 @@
   {% if planner_rec.submitted_order %}
   <p class="muted">The planner submitted another order of the proposals: {{ planner_rec.submitted_order|map("short_id")|join(", ") }}.</p>
   {% endif %}
+  {% if planner_rec.facts_line %}<p class="facts" title="Written by the case server from the evaluation, not by the planner">{{ planner_rec.facts_line }}</p>{% endif %}
   <div class="rationale">{{ planner_rec.rationale_text }}</div>
 </div>
 {% endif %}
@@ -215,6 +221,40 @@
   </form>
 </div>
 {% endif %}
+
+{% for d in extraction_drafts %}
+<div class="card">
+  <h2>Offers read from {{ d.file_name }}: check before they count</h2>
+  <p class="muted">Read by {{ d.method }}{% if d.cost_usd %} ({{ "%.4f"|format(d.cost_usd) }} USD){% endif %}. Nothing is a
+    proposal until you record it here. Yellow fields are ones the reader or the checks are unsure of: compare them with the
+    <a href="/cases/{{ case.case_id }}/files/{{ d.attachment_id }}">document</a>. Prices must be per piece in USD.</p>
+  {% for line in d.instructions_found %}
+  <div class="error">The document contains text addressed to its reader; it was not followed: “{{ line }}”</div>{% endfor %}
+  {% for line in d.problems %}<div class="notice">{{ line }}</div>{% endfor %}
+  <form method="post" action="/cases/{{ case.case_id }}/drafts/{{ d.seq }}/confirm">
+  <div style="overflow-x:auto"><table class="draft">
+    <tr><th>Keep</th>{% for name, label in draft_fields %}<th>{{ label }}</th>{% endfor %}</tr>
+    {% for o in d.rows %}
+    <tr>
+      <td><input type="checkbox" name="keep-{{ o.option_id }}" value="1" checked aria-label="Keep offer {{ o.option_id }}">
+        {{ o.option_id }}{% if o.currency and o.currency|upper not in ["USD", "US$", "$"] %}<div class="tag warn">{{ o.currency }}</div>{% endif %}</td>
+      {% for name, label in draft_fields %}{% set c = o.cells[name] %}
+      <td class="{{ '' if c.certain else 'unsure' }}">
+        {% if name == "kind" %}
+        <select name="{{ o.option_id }}.kind" aria-label="{{ label }}">{% for k in ["new_order", "partial", "expedite", "alternative_part", "decline"] %}
+          <option value="{{ k }}" {{ "selected" if c.shown == k else "" }}>{{ k }}</option>{% endfor %}</select>
+        {% else %}
+        <input name="{{ o.option_id }}.{{ name }}" value="{{ c.shown }}" aria-label="{{ label }}" size="{{ 22 if name in ['split_deliveries', 'conditions'] else 9 }}">
+        {% endif %}
+        {% if c.note or (not c.certain and c.evidence) %}<div class="muted small">{{ c.note }}{% if c.evidence %} · “{{ c.evidence }}”{% endif %}</div>{% endif %}
+      </td>{% endfor %}
+    </tr>
+    {% endfor %}
+  </table></div>
+  <button type="submit">Record the kept offers as proposals</button>
+  </form>
+</div>
+{% endfor %}
 
 {% if case.proposals %}
 <div class="card">

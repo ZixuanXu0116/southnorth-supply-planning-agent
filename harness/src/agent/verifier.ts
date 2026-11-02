@@ -75,7 +75,17 @@ export interface VerifierRun {
 }
 
 export interface VerificationReport {
-	status: "verified" | "skipped" | "error";
+	/** `checked`: the planner's self-check returned its findings (arm C). */
+	status: "verified" | "skipped" | "checked" | "error";
+	/** The check's form (checks.ts); absent for the verifier sub-agent before the form existed. */
+	form?: "subagent" | "deterministic" | "self_check";
+	/** Deterministic findings (arms B and C). */
+	findings?: {
+		option: string;
+		target_unsaid: boolean;
+		fields_unsaid: string[];
+		untraced_figures: string[];
+	};
 	triggered_by: string[];
 	untraced_figures: string[];
 	verdict?: Verdict;
@@ -143,7 +153,11 @@ export function untracedFigures(text: string, sources: unknown[]): string[] {
 	return [...new Set(untraced)];
 }
 
-/** Quoted terms of a supplier proposal that a rationale may cite (validity, surcharge, price, splits). */
+/**
+ * Typed terms of a supplier proposal that a rationale may cite (validity, surcharge, price, splits). The
+ * supplier's own words (its messages, a proposal's free-text conditions) never reach the verifier: they go to
+ * purchasing through the planner only (the owner, 2026-11-01).
+ */
 const PROPOSAL_FIELDS = [
 	"proposal_id",
 	"kind",
@@ -156,12 +170,11 @@ const PROPOSAL_FIELDS = [
 	"surcharge_amount",
 	"freight_amount",
 	"split_deliveries",
-	"conditions",
 	"within_mandate",
 ] as const;
 
-/** The case facts the verifier needs (with the proposals as quoted and the service target), without events,
- * messages, or the projection. */
+/** The case facts the verifier needs (data and figures: the proposals' typed terms, the service target, the
+ * engine's lever detail), without events, messages, supplier text, or the projection. */
 export function caseFacts(getCase: Row): Row {
 	const engine = (getCase.engine ?? {}) as Row;
 	const keep = [
@@ -177,6 +190,9 @@ export function caseFacts(getCase: Row): Row {
 		"stockout_risk_no_action",
 		"description",
 		"vendor_name",
+		// The engine's lever detail (planned lead days, days gained, the open order): planner-evaluate-v6-v5
+		// found the planned lead time cited correctly and failed for want of it.
+		"lever_detail",
 	] as const;
 	const facts: Row = { case_id: getCase.case_id, plant: getCase.plant, material: getCase.material };
 	for (const key of keep) if (engine[key] !== undefined) facts[key] = engine[key];

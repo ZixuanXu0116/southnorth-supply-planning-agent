@@ -274,6 +274,8 @@ MESSAGE_COLUMNS = tuple(Message.__dataclass_fields__)
 PROPOSAL_COLUMNS = tuple(Proposal.__dataclass_fields__)
 ATTACHMENT_COLUMNS = tuple(Attachment.__dataclass_fields__)
 ATTACHMENT_VOLUME = "attachments"
+# Copies of the deployed pages' access log and agent traces (apps/web/src/snm_web/mirror.py).
+RUNS_VOLUME = "runs"
 
 
 def insert_sql(catalog: str, table: str, columns: tuple[str, ...]) -> str:

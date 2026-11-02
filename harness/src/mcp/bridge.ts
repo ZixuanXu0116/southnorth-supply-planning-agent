@@ -1,6 +1,6 @@
 /**
- * MCP client bridge: connects to an MCP server over stdio and exposes its tools
- * as PI `AgentTool`s.
+ * MCP client bridge: connects to an MCP server, a child process over stdio or a container over Streamable HTTP
+ * (decision record 010), and exposes its tools as PI `AgentTool`s.
  *
  * - The tool set is listed once at connect time and frozen for the session.
  * - Tool failures reported by the server (`isError`) become `McpToolError`s,
@@ -11,9 +11,25 @@
 import type { AgentTool, AgentToolResult } from "@earendil-works/pi-agent-core";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { CallToolResult, Tool as McpTool } from "@modelcontextprotocol/sdk/types.js";
 import type { TSchema } from "typebox";
 import type { ToolServerLaunch } from "./tool-server.js";
+
+/** A server reached over Streamable HTTP: its `/mcp` URL, the service token, and the headers that name the run
+ * (and, for the case server, the role) on every request. */
+export interface RemoteServer {
+	url: string;
+	token: string;
+	headers?: Record<string, string>;
+}
+
+/** Where a server runs: a child process (stdio) or a container (HTTP). */
+export type ServerEndpoint = ToolServerLaunch | RemoteServer;
+
+export function isRemote(endpoint: ServerEndpoint): endpoint is RemoteServer {
+	return "url" in endpoint;
+}
 
 export interface McpToolErrorPayload {
 	code: string;
@@ -135,8 +151,8 @@ export class McpToolBridge {
 		this.tools = Object.freeze(mcpTools.map((tool) => this.toAgentTool(tool, options)));
 	}
 
-	/** Spawns the server, performs the MCP handshake, and lists its tools. */
-	static async connect(launch: ToolServerLaunch, options: McpBridgeOptions = {}): Promise<McpToolBridge> {
+	/** Spawns the server (or connects to it over HTTP), performs the MCP handshake, and lists its tools. */
+	static async connect(endpoint: ServerEndpoint, options: McpBridgeOptions = {}): Promise<McpToolBridge> {
 		const settings: BridgeSettings = {
 			serverName: options.serverName ?? "snm-tools",
 			callTimeoutMs: options.callTimeoutMs ?? DEFAULTS.callTimeoutMs,
@@ -144,21 +160,29 @@ export class McpToolBridge {
 			stderrLines: options.stderrLines ?? DEFAULTS.stderrLines,
 			...(options.spill ? { spill: options.spill } : {}),
 		};
-		const transport = new StdioClientTransport({
-			command: launch.command,
-			args: launch.args,
-			cwd: launch.cwd,
-			env: launch.env,
-			stderr: "pipe",
-		});
 		const stderrTail: string[] = [];
-		transport.stderr?.on("data", (chunk: Buffer) => {
-			for (const line of chunk.toString("utf8").split("\n")) {
-				if (!line.trim()) continue;
-				stderrTail.push(line);
-				if (stderrTail.length > settings.stderrLines) stderrTail.shift();
-			}
-		});
+		let transport: StdioClientTransport | StreamableHTTPClientTransport;
+		if (isRemote(endpoint)) {
+			transport = new StreamableHTTPClientTransport(new URL(endpoint.url), {
+				requestInit: { headers: { ...(endpoint.headers ?? {}), Authorization: `Bearer ${endpoint.token}` } },
+			});
+		} else {
+			const stdio = new StdioClientTransport({
+				command: endpoint.command,
+				args: endpoint.args,
+				cwd: endpoint.cwd,
+				env: endpoint.env,
+				stderr: "pipe",
+			});
+			stdio.stderr?.on("data", (chunk: Buffer) => {
+				for (const line of chunk.toString("utf8").split("\n")) {
+					if (!line.trim()) continue;
+					stderrTail.push(line);
+					if (stderrTail.length > settings.stderrLines) stderrTail.shift();
+				}
+			});
+			transport = stdio;
+		}
 		const client = new Client({ name: "snm-harness", version: "0.1.0" });
 		try {
 			await client.connect(transport, { timeout: settings.callTimeoutMs });

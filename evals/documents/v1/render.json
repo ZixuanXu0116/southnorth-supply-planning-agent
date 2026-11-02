@@ -1,0 +1,112 @@
+[
+ {
+  "html": "s01-clean.html",
+  "format": "pdf",
+  "out": "s01-clean.pdf"
+ },
+ {
+  "html": "s01-clean.html",
+  "format": "png",
+  "out": "s01-clean.png"
+ },
+ {
+  "html": "s01-clean.html",
+  "format": "scan",
+  "out": "s01-clean.scan.pdf"
+ },
+ {
+  "html": "s02-three-options.html",
+  "format": "pdf",
+  "out": "s02-three-options.pdf"
+ },
+ {
+  "html": "s02-three-options.html",
+  "format": "png",
+  "out": "s02-three-options.png"
+ },
+ {
+  "html": "s03-euro.html",
+  "format": "pdf",
+  "out": "s03-euro.pdf"
+ },
+ {
+  "html": "s03-euro.html",
+  "format": "png",
+  "out": "s03-euro.png"
+ },
+ {
+  "html": "s04-relative-delivery.html",
+  "format": "pdf",
+  "out": "s04-relative-delivery.pdf"
+ },
+ {
+  "html": "s04-relative-delivery.html",
+  "format": "png",
+  "out": "s04-relative-delivery.png"
+ },
+ {
+  "html": "s05-per-box.html",
+  "format": "pdf",
+  "out": "s05-per-box.pdf"
+ },
+ {
+  "html": "s05-per-box.html",
+  "format": "png",
+  "out": "s05-per-box.png"
+ },
+ {
+  "html": "s06-validity-period.html",
+  "format": "pdf",
+  "out": "s06-validity-period.pdf"
+ },
+ {
+  "html": "s06-validity-period.html",
+  "format": "png",
+  "out": "s06-validity-period.png"
+ },
+ {
+  "html": "s07-decline.html",
+  "format": "pdf",
+  "out": "s07-decline.pdf"
+ },
+ {
+  "html": "s07-decline.html",
+  "format": "png",
+  "out": "s07-decline.png"
+ },
+ {
+  "html": "s08-injection.html",
+  "format": "pdf",
+  "out": "s08-injection.pdf"
+ },
+ {
+  "html": "s08-injection.html",
+  "format": "png",
+  "out": "s08-injection.png"
+ },
+ {
+  "html": "s08-injection.html",
+  "format": "scan",
+  "out": "s08-injection.scan.pdf"
+ },
+ {
+  "html": "s09-prose-split.html",
+  "format": "pdf",
+  "out": "s09-prose-split.pdf"
+ },
+ {
+  "html": "s09-prose-split.html",
+  "format": "png",
+  "out": "s09-prose-split.png"
+ },
+ {
+  "html": "s10-express-fee.html",
+  "format": "pdf",
+  "out": "s10-express-fee.pdf"
+ },
+ {
+  "html": "s10-express-fee.html",
+  "format": "png",
+  "out": "s10-express-fee.png"
+ }
+]

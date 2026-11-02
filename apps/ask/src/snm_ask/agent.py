@@ -16,14 +16,9 @@ from typing import Any
 
 RUN_TIMEOUT_SECONDS = 420
 # Variables every run needs (names only; values are never read here).
-AGENT_ENVIRONMENT = (
-    "SNM_ANTHROPIC_API_KEY",
-    "SNM_MODEL_MAIN",
-    "SNM_MODEL_EXPLORER",
-    "SNM_MODEL_VERIFIER",
-    "DATABRICKS_HOST",
-    "DATABRICKS_WAREHOUSE_ID",
-)
+MODEL_ENVIRONMENT = ("SNM_ANTHROPIC_API_KEY", "SNM_MODEL_MAIN", "SNM_MODEL_EXPLORER", "SNM_MODEL_VERIFIER")
+DATA_ENVIRONMENT = ("DATABRICKS_HOST", "DATABRICKS_WAREHOUSE_ID")
+AGENT_ENVIRONMENT = (*MODEL_ENVIRONMENT, *DATA_ENVIRONMENT)
 ENVIRONMENT_HINT = (
     "stop the page, load your settings in the same terminal (set -a; source ~/.config/snm/env; set +a), "
     "and start it again (apps/ask/README.md)"
@@ -36,9 +31,20 @@ def role_environment(role: str) -> tuple[str, str]:
     return f"SNM_DATABRICKS_CLIENT_ID_{suffix}", f"SNM_DATABRICKS_CLIENT_SECRET_{suffix}"
 
 
+def remote_tool_server(role: str | None) -> bool:
+    """True when the role's data tool server runs in its own container (decision record 010): the harness then
+    reaches it at ``SNM_TOOL_SERVER_URL_<ROLE>`` and this process holds no Databricks setting at all."""
+    if role is None:
+        return any(name.startswith("SNM_TOOL_SERVER_URL_") and value for name, value in os.environ.items())
+    return bool(os.environ.get(f"SNM_TOOL_SERVER_URL_{role.upper()}"))
+
+
 def missing_environment(role: str | None = None) -> list[str]:
     """The variables a run as ``role`` needs that are not set (checked by name, never by value)."""
-    names = [*AGENT_ENVIRONMENT, *(role_environment(role) if role else ())]
+    if remote_tool_server(role):
+        names = [*MODEL_ENVIRONMENT, "SNM_TOOL_SERVER_TOKEN"]
+    else:
+        names = [*AGENT_ENVIRONMENT, *(role_environment(role) if role else ())]
     return [name for name in names if not os.environ.get(name)]
 
 

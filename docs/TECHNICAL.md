@@ -47,7 +47,9 @@ The agent loop is TypeScript (PI's `pi-agent-core` and `pi-ai`, pinned, behind a
 
 The harness has no database client and no tool exposes credentials or the environment, so the tool server is the only path from an agent to the data. MCP is the narrow, typed door between the two processes; the protection comes from what stands on each side of it: the separate process with its own allowlisted environment, the server's checks, and the warehouse's permissions. For a production deployment, each process would also be started with only its own variables (here the harness inherits the session's environment, though it uses none of the database settings).
 
-**Sandboxing.** Isolation is by process, credential, and capability rather than by an operating-system sandbox. Each MCP server is a separate process with an explicit environment allowlist. No agent has a shell, a file-write, or a code-execution tool: every tool is a fixed function. SQL runs on the remote warehouse as a read-only principal, after an AST guard (one `SELECT` or `WITH`, a function deny list, tables only in catalog `snm`, table and column access per role, a mandatory `LIMIT`) and under a statement timeout; Unity Catalog grants, row filters, and masks enforce the role a second time. An OS-level sandbox (a container without network or credentials, with CPU, memory, and time limits, inputs passed by handle) becomes necessary the day an agent gets a code-execution tool, for example Python for ad hoc statistics; in production each MCP server would also run in its own container with only its own secrets.
+**Sandboxing.** Isolation is by process, credential, and capability rather than by an operating-system sandbox. Each MCP server is a separate process with an explicit environment allowlist. No agent has a shell, a file-write, or a code-execution tool: every tool is a fixed function. SQL runs on the remote warehouse as a read-only principal, after an AST guard (one `SELECT` or `WITH`, a function deny list, tables only in catalog `snm`, table and column access per role, a mandatory `LIMIT`) and under a statement timeout; Unity Catalog grants, row filters, and masks enforce the role a second time. An OS-level sandbox (a container without network or credentials, with CPU, memory, and time limits, inputs passed by handle) becomes necessary the day an agent gets a code-execution tool, for example Python for ad hoc statistics.
+
+**One server per container** (built, decision record 010, [`DEPLOYMENT.md`](DEPLOYMENT.md)). Besides stdio, each server can run in its own container over MCP's Streamable HTTP transport: the data tool server per role with only that role's service principal, the case server with only the case store and no route out, and the pages with the harness holding only the Anthropic key and the service token of the server they call. Every request carries the service token; the harness states the run (and, to the case server, the role) in headers. `deploy/compose.yaml` runs the four containers.
 
 ## 2. Context engineering
 
@@ -169,6 +171,7 @@ Built: the case server's intake profile, bound to one case: `get_request`, `reco
 - **People decide.** No agent sends anything outside the company, records a decision, creates or changes a purchase order, or accepts a price.
 - **Governed by role.** Each role queries as its own service principal; site isolation, people-level data, and commercial figures are enforced by Unity Catalog and by the guard.
 - **Outward text is checked.** Text to a supplier may carry only the request's outward fields; the case server refuses anything else.
+- **Facts are not left to the model's wording.** A planner recommendation is shown under a facts line the case server writes from the recommended option's evaluation (arrival, stock-out risk against the service target, the mandate fields missed, expected total cost), so a missed target or mandate field reaches purchasing whatever the planner's text says.
 - **Untrusted input.** Tool outputs and supplier messages are data, never instructions.
 
 ## 10. Evaluation
@@ -180,6 +183,6 @@ Built: the case server's intake profile, bound to one case: `get_request`, `reco
 
 ## 11. Status
 
-- **Built:** spill files and handoff documents (the context budget, §6); the engine (stock-out risk per option), the case store and case server, the purchasing and supplier pages, the planner agent, the data agent with follow-up questions, governance, and evaluation.
+- **Built:** one MCP server per container over Streamable HTTP (§1, decision record 010); spill files and handoff documents (the context budget, §6); the engine (stock-out risk per option), the case store and case server, the purchasing and supplier pages, the planner agent, the data agent with follow-up questions, governance, and evaluation.
 - **In progress:** the intake agent (case-server side built; runner, prompt, supplier simulator, and gates per decision record 008); the improvement loop (decision record 009); the planner's verifier (built, off by default, being measured).
 - **Planned:** questions inside a case thread for purchasing and for suppliers; the explorer; a `purchasing` identity so the planner can query data; a scheduled job that syncs, publishes, and closes cases.

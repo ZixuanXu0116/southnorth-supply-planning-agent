@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import os
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -66,8 +67,41 @@ class CaseView:
         return self.snapshot.get("lever") == "transfer"
 
 
+SNAPSHOT_EVENTS = ("case_opened", "case_updated")
+
+
+def _engine_update(event: Event) -> dict[str, Any]:
+    """An engine snapshot event in a case's history, in brief: the full snapshot is the case's ``engine``
+    block when it is the latest one."""
+    snap = event.payload or event.facts
+    return {
+        key: snap.get(key)
+        for key in ("as_of_date", "condition", "trigger_date", "gap_qty", "lever", "engine_version")
+        if snap.get(key) is not None
+    }
+
+
+def _differs(confirmed: Any, drafted: Any) -> bool:
+    """Whether purchasing changed a drafted value (numbers by value, empty values alike)."""
+    if confirmed in (None, "", []) and drafted in (None, "", []):
+        return False
+    try:
+        return abs(float(confirmed) - float(drafted)) > 1e-9
+    except (TypeError, ValueError):
+        return json.dumps(confirmed, sort_keys=True, default=str) != json.dumps(
+            drafted, sort_keys=True, default=str
+        )
+
+
 def _now() -> datetime:
-    return datetime.now(UTC).replace(microsecond=0)
+    """The case server's clock: the wall clock, or, for a frozen synthetic world such as an eval batch, the
+    wall clock's time on a fixed day (``SNM_CASE_TODAY``, YYYY-MM-DD)."""
+    now = datetime.now(UTC).replace(microsecond=0)
+    pinned = os.environ.get("SNM_CASE_TODAY", "").strip()
+    if pinned:
+        day = date.fromisoformat(pinned)
+        now = now.replace(year=day.year, month=day.month, day=day.day)
+    return now
 
 
 def _normalize_number(token: str) -> str:
@@ -120,6 +154,11 @@ class CaseService:
         self.store = store
         self.planning = planning
         self.clock = clock
+        # Caches for a long-lived service (the app's resident case server): an evaluation is deterministic for
+        # a case snapshot and an option, and a case's proposals change only with a new event (the store writes
+        # the event last), so the case's last event sequence keys them, also across processes.
+        self._evaluations: dict[tuple[str, int, str, str, str], Evaluation] = {}
+        self._proposal_reads: dict[tuple[str, int], list[Proposal]] = {}
 
     # ----------------------------------------------------------------------------------- state
 
@@ -319,7 +358,7 @@ class CaseService:
         if not self._visible(actor, view):
             raise CaseError("OUT_OF_SCOPE", f"Case {case_id} is outside role {actor.role}.")
         cost = self._cost_access(actor)
-        proposals = [self._proposal_out(p, cost) for p in self.store.proposals(case_id)]
+        proposals = [self._proposal_out(p, cost) for p in self._proposals(view)]
         out: dict[str, Any] = {
             "case_id": case_id,
             "state": view.state,
@@ -327,6 +366,9 @@ class CaseService:
             "plant": view.plant,
             "material": view.material,
             "engine": self._snapshot_for(actor, view.snapshot),
+            # Whether the latest engine run no longer flags the case: an engine update after a
+            # condition_cleared event flags it again, so the history alone can mislead.
+            "cleared": view.cleared,
             "events": [
                 {
                     "seq": e.seq,
@@ -334,10 +376,11 @@ class CaseService:
                     "state_after": e.state_after,
                     "actor": f"{e.actor_kind}/{e.actor_role}",
                     "at": e.created_at.isoformat(),
-                    "detail": e.payload if cost else e.facts,
+                    "detail": _engine_update(e)
+                    if e.event_type in SNAPSHOT_EVENTS
+                    else (e.payload if cost else e.facts),
                 }
                 for e in view.events
-                if e.event_type not in ("case_opened", "case_updated")
             ],
             "proposals": proposals,
             "mandate": self._mandate_out(view, cost),
@@ -444,7 +487,11 @@ class CaseService:
         if snap.get("lever") and snap.get("lever_cost_usd") is not None:
             lever_costs.setdefault(lever, float(snap["lever_cost_usd"]))
         shortage = snap.get("condition") == "shortage"
-        speed = shortage and (lever in EXPEDITE_LEVERS or not snap.get("covers_in_time"))
+        # Whether the engine's lever arrives in time if ordered today (order_delay_days).
+        chosen = levers.get(lever) or {}
+        arrival = self.lever_arrival(snap, lever, chosen).isoformat() if chosen.get("coverage_date") else None
+        in_time = bool(snap.get("covers_in_time")) and (arrival is None or arrival <= trigger.isoformat())
+        speed = shortage and (lever in EXPEDITE_LEVERS or not in_time)
         expedites = [name for name in EXPEDITE_LEVERS if name in levers and name in lever_costs]
         basis_lever = None
         if speed and expedites:
@@ -472,8 +519,8 @@ class CaseService:
                 )
             else:
                 basis = (
-                    f"The engine's {lever} arrives {snap.get('coverage_date')}, by the trigger date "
-                    f"{trigger.isoformat()}: no surcharge and no expedite freight are needed."
+                    f"The engine's {lever} arrives {arrival or snap.get('coverage_date')}, by the trigger "
+                    f"date {trigger.isoformat()}: no surcharge and no expedite freight are needed."
                 )
         kinds = ["expedite" if lever == "expedite" else "new_order", "partial", "alternative_part"]
         mandate = model.Mandate(
@@ -659,12 +706,21 @@ class CaseService:
         events.append(self.record_message(actor, case_id, draft.payload["message"], "outbound", "human"))
         return events
 
-    def decision_choices(self, case_id: str) -> list[str]:
-        view = self.view(case_id)
-        snap = view.snapshot
+    def reference_options(self, case_id: str) -> list[str]:
+        """The engine's levers and doing nothing: estimates the proposals are compared with."""
+        snap = self.view(case_id).snapshot
         levers = [snap.get("lever")] + [a.get("lever") for a in snap.get("alternatives") or []]
-        proposals = [p.proposal_id for p in self.store.proposals(case_id) if p.kind != "decline"]
-        return [*proposals, *[lever for lever in levers if lever], "no_action"]
+        return [*[lever for lever in levers if lever], "no_action"]
+
+    def decision_choices(self, case_id: str) -> list[str]:
+        """What a decision can choose. Once the supplier has quoted, its quotes or doing nothing (the owner,
+        2026-11-02): the engine's levers are estimates, not offers, and getting one takes another exchange
+        with the supplier. Before any quote (or when every answer is a decline), the engine's own levers."""
+        view = self.view(case_id)
+        offers = [p.proposal_id for p in self._proposals(view) if p.kind != "decline"]
+        if offers:
+            return [*offers, "no_action"]
+        return self.reference_options(case_id)
 
     def decide(
         self, actor: Actor, case_id: str, choice: str, rationale: str = "", run_id: str | None = None
@@ -698,7 +754,7 @@ class CaseService:
         missed, eligible). Eligible proposals compete on cost and come first: those inside the mandate and,
         under the expected-cost rule, a C part's proposals that miss only the arrival date (record 007)."""
         rows = []
-        for proposal in self.store.proposals(view.case_id):
+        for proposal in self._proposals(view):
             if proposal.kind == "decline":
                 continue
             evaluation = self._evaluate(view, proposal.proposal_id)
@@ -725,16 +781,16 @@ class CaseService:
             raise CaseError("OUT_OF_SCOPE", f"Case {case_id} is outside role {actor.role}.")
         access = self._cost_access(actor)
         rule, ranking = self._ranking(view)
+        # Reference rows carry the expected total cost too (verifier-form-v1: without it the planner gave
+        # doing nothing's plain total as its expected total).
         reference = [
-            self._evaluate(view, choice).public(access)
-            for choice in self.decision_choices(case_id)
-            if not choice.startswith("P-")
+            public_evaluation(self._evaluate(view, choice), access)
+            for choice in self.reference_options(case_id)
         ]
         rows = []
         for rank, (evaluation, missed, eligible) in enumerate(ranking, start=1):
-            row = {"rank": rank, **evaluation.public(access), "missed": missed}
+            row = {"rank": rank, **public_evaluation(evaluation, access), "missed": missed}
             row["late_priced_by_risk"] = eligible and missed == ["arrival"]
-            row["expected_total_cost"] = round(expected_total(evaluation), 2) if access else None
             rows.append(row)
         return {"rule": rule, "ranked": rows, "reference": reference}
 
@@ -745,6 +801,52 @@ class CaseService:
         if ranking and ranking[0][2]:
             return ranking[0][0].option
         return None
+
+    def facts_line(self, actor: Actor, case_id: str, recommended: str) -> str:
+        """The recommended option's evaluated facts in one sentence, written by the server and never by a
+        model (change card change-20261030-planner-recommendation-facts): the case page shows it above the
+        planner's text, so a missed service target or mandate field reaches purchasing whatever that text
+        says."""
+        view = self.view(case_id)
+        evaluation = self._evaluate(view, recommended)
+        spec = self.option_spec(view, recommended)
+        parts: list[str] = []
+        if spec.receipts:
+            parts.append(f"arrives {max(r.arrival_date for r in spec.receipts).isoformat()}")
+        if evaluation.coverage_date is None:
+            parts.append("does not cover the gap")
+        demand = DemandModel.from_json(view.snapshot.get("demand_model"))
+        if evaluation.stockout_risk is None:
+            parts.append("stock-out risk not priced")
+        else:
+            risk = f"stock-out risk {evaluation.stockout_risk * 100:.2f}%"
+            if demand is not None and evaluation.meets_service_target is not None:
+                allowed = round((1 - demand.service_target) * 100, 2)
+                verdict = "met" if evaluation.meets_service_target else "missed"
+                risk += f" (target at most {allowed:g}%: {verdict})"
+            parts.append(risk)
+        if recommended.startswith("P-"):
+            row = next((r for r in self._ranking(view)[1] if r[0].option == recommended), None)
+            missed = row[1] if row else []
+            if not missed:
+                parts.append("mandate: inside")
+            else:
+                names = (
+                    " and ".join(missed)
+                    if len(missed) <= 2
+                    else ", ".join(missed[:-1]) + f" and {missed[-1]}"
+                )
+                priced = row is not None and row[2] and missed == ["arrival"]
+                parts.append(f"mandate: {names} missed" + (" (priced by risk)" if priced else ""))
+        else:
+            parts.append("not a supplier offer")
+        if self._cost_access(actor):
+            parts.append(
+                f"expected spend {expected_spend(evaluation):,.2f} USD "
+                f"({expected_total(evaluation):,.2f} vs. the standard price)"
+            )
+        label = re.sub(r"-C-[A-Z0-9]+-\d+-[A-Z]+-\d{8}(-\d+)?$", "", recommended)
+        return f"Recommended {label}: " + "; ".join(parts) + "."
 
     def publish_transfer(self, run_id: str | None, case_id: str) -> list[Event]:
         """A transfer case (pull or excess) as the engine recommends it, published to logistics."""
@@ -956,12 +1058,34 @@ class CaseService:
             return float(value) / float(gap)
         return 0.0
 
+    def order_delay_days(self, snap: dict[str, Any]) -> int:
+        """Days from the snapshot's as-of date to today. The engine dates its levers as if ordered on the
+        as-of date; a case acted on later (an unchanged case keeps its snapshot) orders today, so each lever
+        that is still an action to take arrives that many days later."""
+        as_of = snap.get("as_of_date")
+        if not as_of:
+            return 0
+        return max(0, (self.clock().date() - date.fromisoformat(str(as_of)[:10])).days)
+
+    def lever_arrival(self, snap: dict[str, Any], option: str, lever: dict[str, Any]) -> date:
+        """A lever's arrival if ordered today: the engine's date moved by the order delay; an expedite never
+        later than the open order's own date (expediting then gains nothing)."""
+        arrival = date.fromisoformat(str(lever["coverage_date"]))
+        delay = self.order_delay_days(snap)
+        if option in ("no_action", "move_to_overflow") or delay == 0:
+            return arrival
+        moved = arrival + timedelta(days=delay)
+        if option == "expedite":
+            expected = arrival + timedelta(days=int(lever.get("days_gained", 0)))
+            return min(moved, expected)
+        return moved
+
     def option_spec(self, view: CaseView, option: str) -> OptionSpec:
         """An engine lever (by name) or a recorded proposal (by proposal_id) as receipts and terms."""
         snap = view.snapshot
         costs = self.planning.costs()
         if option.startswith("P-"):
-            proposal = next((p for p in self.store.proposals(view.case_id) if p.proposal_id == option), None)
+            proposal = next((p for p in self._proposals(view) if p.proposal_id == option), None)
             if proposal is None:
                 raise CaseError("UNKNOWN_OPTION", f"No proposal {option} on this case.")
             receipts: list[Receipt] = []
@@ -1007,11 +1131,12 @@ class CaseService:
         lever = self._levers(snap).get(option)
         if lever is None or not lever.get("coverage_date"):
             raise CaseError("UNKNOWN_OPTION", f"{option} is neither a proposal id nor a lever of this case.")
-        arrival = date.fromisoformat(str(lever["coverage_date"]))
+        planned = date.fromisoformat(str(lever["coverage_date"]))
+        arrival = self.lever_arrival(snap, option, lever)
         qty = float(lever["qty"])
         lever_costs = snap.get("alternative_costs_usd") or {}
         if option == "expedite":
-            expected = arrival + timedelta(days=int(lever.get("days_gained", 0)))
+            expected = planned + timedelta(days=int(lever.get("days_gained", 0)))
             total = float(lever_costs.get("expedite", 0.0))
             _, freight = self._expedite_terms(snap, lever)
             freight = min(freight, total)
@@ -1084,13 +1209,26 @@ class CaseService:
         view = self.view(case_id)
         if not self._visible(actor, view):
             raise CaseError("OUT_OF_SCOPE", f"Case {case_id} is outside role {actor.role}.")
-        result = self._evaluate(view, option)
-        return result.public(self._cost_access(actor))
+        return public_evaluation(self._evaluate(view, option), self._cost_access(actor))
+
+    def _proposals(self, view: CaseView) -> list[Proposal]:
+        key = (view.case_id, view.events[-1].seq if view.events else 0)
+        if key not in self._proposal_reads:
+            self._proposal_reads[key] = self.store.proposals(view.case_id)
+        return self._proposal_reads[key]
 
     def _evaluate(self, view: CaseView, option: str) -> Evaluation:
+        # A lever's arrival depends on today (order_delay_days), and every figure on the published run.
+        version = getattr(self.planning, "version", lambda: "")()
+        key = (view.case_id, view.snapshot_seq, option, self.clock().date().isoformat(), version)
+        if key not in self._evaluations:
+            self._evaluations[key] = self._evaluate_uncached(view, option)
+        return self._evaluations[key]
+
+    def _evaluate_uncached(self, view: CaseView, option: str) -> Evaluation:
         spec = self.option_spec(view, option)
         snap = view.snapshot
-        return evaluate(
+        evaluation = evaluate(
             view.case_id,
             view.snapshot_seq,
             str(snap.get("condition")),
@@ -1102,6 +1240,18 @@ class CaseService:
             trigger=date.fromisoformat(str(snap["trigger_date"])),
             model=DemandModel.from_json(snap.get("demand_model")),
         )
+        lever = None if option.startswith("P-") else self._levers(snap).get(option)
+        delay = self.order_delay_days(snap)
+        if lever and lever.get("coverage_date") and delay:
+            planned = date.fromisoformat(str(lever["coverage_date"]))
+            arrival = self.lever_arrival(snap, option, lever)
+            if arrival != planned:
+                evaluation.notes.append(
+                    f"the engine planned this lever on its as-of date {snap['as_of_date']} to arrive "
+                    f"{planned.isoformat()}; ordered today, {delay} days later, it arrives "
+                    f"{arrival.isoformat()}"
+                )
+        return evaluation
 
     # ----------------------------------------------------------------------------------- planner agent
 
@@ -1208,6 +1358,14 @@ class CaseService:
                 "UNRANKED",
                 f"Submit the proposals in purchasing's order (rank_options): {', '.join(order)}.",
             )
+        choices = self.decision_choices(case_id)
+        if recommended not in choices:
+            raise CaseError(
+                "NOT_A_CHOICE",
+                f"Recommend one of the choices purchasing can decide: {', '.join(choices)}. The engine's "
+                "options are estimates, not offers; if one looks better, say in the rationale that "
+                "purchasing could ask the supplier for it.",
+            )
         return self.append(
             actor,
             case_id,
@@ -1218,6 +1376,7 @@ class CaseService:
                 "rationale_text": rationale_text,
                 "ranking_rule": self._ranking(self.view(case_id))[0],
                 "server_ranking": order,
+                "facts_line": self.facts_line(actor, case_id, recommended),
             },
         )
 
@@ -1324,8 +1483,77 @@ class CaseService:
         }
         return self.append(actor, case_id, "message_recorded", payload, messages=[message])
 
+    def record_extraction(
+        self,
+        case_id: str,
+        attachment_id: str,
+        draft: dict[str, Any],
+        method: str,
+        cost_usd: float = 0.0,
+        run_id: str | None = None,
+    ) -> Event:
+        """The system records an extractor's checked draft of a supplier document (never a proposal)."""
+        if not any(a.attachment_id == attachment_id for a in self.store.attachments(case_id)):
+            raise CaseError("UNKNOWN_ATTACHMENT", f"No attachment {attachment_id} on case {case_id}.")
+        payload = {
+            "attachment_id": attachment_id,
+            "method": method,
+            "options": draft.get("options", []),
+            "instructions_found": draft.get("instructions_found", []),
+            "problems": draft.get("problems", []),
+            "checks": draft.get("checks", []),
+            "cost_usd": round(float(cost_usd), 6),
+            "run_id": run_id,
+        }
+        return self.append(Actor("system", "system", run_id), case_id, "extraction_drafted", payload)
+
+    def extraction_drafts(self, case_id: str) -> list[Event]:
+        """The drafts purchasing has not confirmed yet."""
+        view = self.view(case_id)
+        confirmed = {
+            (e.payload.get("source") or {}).get("extraction_seq")
+            for e in view.events
+            if e.event_type == "proposal_recorded"
+        }
+        return [e for e in view.events if e.event_type == "extraction_drafted" and e.seq not in confirmed]
+
+    def confirm_extraction(
+        self, actor: Actor, case_id: str, extraction_seq: int, options: list[dict[str, Any]]
+    ) -> Event:
+        """Purchasing records a draft's offers as proposals, as it confirmed or corrected them; the event
+        names the draft and the fields purchasing changed (the extractor's mistakes, for its measurement)."""
+        draft = next((e for e in self.extraction_drafts(case_id) if e.seq == extraction_seq), None)
+        if draft is None:
+            raise CaseError("UNKNOWN_DRAFT", f"No open extraction draft {extraction_seq} on case {case_id}.")
+        if not options:
+            raise CaseError("EMPTY_REPLY", "Keep at least one offer, or record the document as a note.")
+        before = {o["option_id"]: o["fields"] for o in draft.payload.get("options", [])}
+        changed = []
+        for option in options:
+            fields = before.get(option.get("option_id"), {})
+            for name, entry in fields.items():
+                if name in ("currency", "conditions"):
+                    continue
+                if _differs(option.get(name), entry.get("value")):
+                    changed.append(f"{option.get('option_id')}.{name}")
+        attachment = next(
+            a for a in self.store.attachments(case_id) if a.attachment_id == draft.payload["attachment_id"]
+        )
+        source = {
+            "extraction_seq": extraction_seq,
+            "attachment_id": attachment.attachment_id,
+            "method": draft.payload.get("method"),
+            "changed_fields": changed,
+        }
+        return self.record_proposal(actor, case_id, options, attachment.message_id, source=source)
+
     def record_proposal(
-        self, actor: Actor, case_id: str, options: list[dict[str, Any]], source_message_id: str | None = None
+        self,
+        actor: Actor,
+        case_id: str,
+        options: list[dict[str, Any]],
+        source_message_id: str | None = None,
+        source: dict[str, Any] | None = None,
     ) -> Event:
         view = self.view(case_id)
         try:
@@ -1372,7 +1600,12 @@ class CaseService:
                     json.dumps(option.within_mandate) if option.within_mandate else None,
                 )
             )
-        payload = {"proposal_ids": ids, "options": [json.loads(o.model_dump_json()) for o in parsed]}
+        payload: dict[str, Any] = {
+            "proposal_ids": ids,
+            "options": [json.loads(o.model_dump_json()) for o in parsed],
+        }
+        if source is not None:
+            payload["source"] = source
         return self.append(actor, case_id, "proposal_recorded", payload, proposals=rows)
 
     def escalate(self, actor: Actor, case_id: str, reason: str, summary: str) -> Event:
@@ -1414,7 +1647,9 @@ class CaseService:
                     material=row["material"],
                 )
                 counts["opened"] += 1
-            elif _material_change(view.snapshot, snapshot):
+            elif view.cleared or _material_change(view.snapshot, snapshot):
+                # A cleared case the engine flags again is updated even when its figures did not change:
+                # the update is what marks it flagged again.
                 self.append(engine, view.case_id, "case_updated", snapshot)
                 counts["updated"] += 1
             else:
@@ -1424,7 +1659,8 @@ class CaseService:
         if cases.height:
             as_of = str(cases.get_column("as_of_date")[0])
         for key, view in open_cases.items():
-            if key in seen or as_of is None:
+            # A case already cleared stays cleared until the engine flags it again (case_updated).
+            if key in seen or as_of is None or view.cleared:
                 continue
             last = next((e for e in reversed(view.events) if e.event_type == "condition_cleared"), None)
             if last is None or str(last.facts.get("as_of_date")) != as_of:
@@ -1434,6 +1670,23 @@ class CaseService:
 
 
 _SNAPSHOT_FIELDS = tuple(model.EngineSnapshot.model_fields)
+
+
+def public_evaluation(evaluation: Evaluation, cost_access: bool) -> dict[str, Any]:
+    """An evaluation as a role sees it, with its expected total cost (record 007: measured against the
+    reference price) and its expected spend (what purchasing would pay) when the role sees costs."""
+    out = evaluation.public(cost_access)
+    out["expected_total_cost"] = round(expected_total(evaluation), 2) if cost_access else None
+    out["expected_spend"] = round(expected_spend(evaluation), 2) if cost_access else None
+    return out
+
+
+def expected_spend(evaluation: Evaluation) -> float:
+    """The purchase value at the offered price plus surcharge, freight, order cost, holding, and the
+    expected line-down: the expected total cost with the goods' value in place of the price difference.
+    Positive, unlike the expected total cost, which is negative when an offer is cheaper than the reference
+    price."""
+    return evaluation.purchase_value + expected_total(evaluation) - evaluation.price_difference_cost
 
 
 def expected_total(evaluation: Evaluation) -> float:

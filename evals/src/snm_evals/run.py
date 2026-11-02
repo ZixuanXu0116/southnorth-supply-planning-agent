@@ -28,10 +28,11 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 HARNESS = REPO_ROOT / "harness"
 CLI = HARNESS / "dist" / "cli" / "ask.js"
 RUNS_ROOT = REPO_ROOT / "runs" / "evals"
-ARMS = ("main", "main_spill", "main_v2", "main_v1", "baseline", "main_bare", "baseline_bare")
+ARMS = ("main", "main_spill", "main_nospill", "main_v2", "main_v1", "baseline", "main_bare", "baseline_bare")
 # Comparisons reported when both arms are present: (treatment, control, what the difference measures).
 COMPARISONS = (
     ("main_spill", "main", "spill files for oversized tool outputs (candidate)"),
+    ("main", "main_nospill", "spill files against the plain cut of oversized outputs"),
     ("main", "main_v2", "governed metric views and query_metric (prompt v4 vs v2)"),
     ("main_v2", "main_v1", "task card + numeric faithfulness gate (prompt v2 vs v1)"),
     ("main", "baseline_bare", "full stack vs naive (knowledge base, prompt, and metadata documentation)"),

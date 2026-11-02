@@ -1,8 +1,8 @@
 # 009. Improve the data agent through a semi-automatic loop: failure card, proposed fix, screen, owner adopts
 
-- **Status:** proposed
+- **Status:** accepted; acceptance runs done 2026-11-01 (the owner's reading of the c109 packet pending)
 - **Date proposed:** 2026-10-28
-- **Date decided:**
+- **Date decided:** 2026-10-31
 - **Decided by:** the owner
 - **Scope:** evaluation process (`PROMPT_CHANGES.md` §5, `EVAL_GUIDE.md` §2 gate G2), harness (a new `improver` profile), configuration (its model and budget); data-agent track only
 
@@ -51,16 +51,16 @@ Fully automatic adoption is out of scope. The screen runs on the same dev cases 
 3. Review order. Proposed: for knowledge-base proposals, screen first and one review of the whole packet (each screen capped at USD 4, nothing adopted without the owner); for prompt proposals, keep the owner's hypothesis and diff reviews before the whole-dev screen, as `PROMPT_CHANGES.md` §5 says today. The alternative: the same single review after the screen for both.
 4. Budgets. Proposed: the proposer at most USD 0.50 and 20 turns per card on the strong tier; the screen at most USD 4 per proposal; one invocation at most USD 5 unless the owner approves more.
 
-Answers (owner, date):
+Answers (owner, 2026-10-31):
 
-1.
-2.
-3.
-4.
+1. The proposer agent in the harness (option 3).
+2. The whole case: question, expected behavior, reference answer, reference SQL, and notes; the leakage guard and the owner's diff review keep answers out of the knowledge base.
+3. Knowledge-base proposals: screen first, then one review of the whole packet; prompt proposals: the owner's hypothesis and diff reviews before the whole-dev screen, as `PROMPT_CHANGES.md` §5 says.
+4. The proposer at most USD 0.50 and 20 turns per card on the strong tier; the screen at most USD 4 per proposal; one invocation at most USD 5 unless the owner approves more.
 
 ## Decision
 
-Pending the owner's answers.
+Option 3 with the answers above (the owner, 2026-10-31). The loop proposes, guards, and screens; the owner adopts, rejects, or asks for another iteration; nothing is adopted automatically until a holdout set exists. The acceptance runs below are the next step.
 
 ## Acceptance
 
@@ -68,6 +68,13 @@ Pending the owner's answers.
 - Replay of c109 as of its batch's commit (the knowledge base without the 2026-10-19 rule): collect, propose, guard, and screen run from one command; the proposal edits the knowledge base and passes the guards; the screen shows c109 passing at least 2 of 3 with no regression among the screen cases; under USD 3 in all. The owner reads the packet and says whether they would have adopted it.
 - Replay of c184 as of its batch's commit (the reference that still named generator 0.7's suppliers): the proposer returns `reference` with no edit, and no screen is spent (about USD 0.30).
 - The acceptance runs cost about USD 3 together, below the USD 5 approval threshold; the result goes into `docs/tracks/DATA_AGENT.md`.
+
+### Results (2026-11-01)
+
+- **c184 replay: met.** The proposer returned root cause `reference` (layer `case_spec`) with no edit: the agent's count of 16 and its four vendors match the case's own reference SQL, while the case's `must_mention` list names five suppliers. No screen was spent; USD 0.067, 2 turns.
+- **c109 replay: met, except the cost.** One command (`snm-evals improve`) ran collect, propose, guard, and screen. The proposal (root cause `interpretation`, layer `kb`) adds 3 lines to `kb/concepts/internal_transfers.md`: the exclusion of transfers from demand is the default; when a question explicitly includes an overflow hub's replenishment, add the transfer out as a separate component and report both and their sum; count a transfer once on the issuing side; "how much" asks for quantity (`MSEG.MENGE`), not line counts. The guards found no problem. Screen on the 24 cases of the manual screen: c109 passes 3/3 after against 0/3 before; the other 23 cases pass 22 in both arms (c154, the discovery task, fails in both); no regression. Advisory verdict: adopt. Cost USD 3.27 (proposal 0.07, screen 3.20) against the bar of USD 3: the source batch could not serve as the control, because the prompt template's role descriptions changed after it (the cosmetic rename of 2026-10-29), so the screen ran a control arm too (estimate USD 2.99 instead of the dry run's 1.49). Cost per question 0.053 before, 0.070 after.
+- **Against the manual fix of 2026-10-19:** the proposal states the same rule (both components and their sum, in quantities, the transfer counted once on the issuing side, never the `313` receiving item or the `315` item). It differs in wording: it names `SHKZG = 'H'` and `MSEG.MENGE` where the manual rule names the plants' movement types, and it does not add the manual rule's sentence that transfers are internal movements, not demand by definition.
+- **Total:** USD 3.34 for both replays, below the USD 5 approval threshold. Packet: `runs/improve/bank-v8-g080-dev-sonnet-c109-replay/packet.md` (git-ignored). Open: the owner reads the packet and says whether they would have adopted it.
 
 ## Consequences
 

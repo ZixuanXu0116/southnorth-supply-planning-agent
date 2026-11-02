@@ -1,0 +1,93 @@
+# Spill suite v1 (change card evals/failures/change-20261030-spill-files.md): questions whose answer depends on
+# a column documented late in a wide table's description, so that under a lowered tool-output ceiling
+# (SNM_MAX_TOOL_OUTPUT_CHARS=3000) the documentation lies past the cut. At 3,000 characters, describe_table keeps
+# the first 15 of the 34 columns of raw_sap_ecc.mseg (6,448 characters in all) and the first 18 of the 29 of
+# raw_sap_ewm.scwm_ordim_c (5,558); the columns asked about start after character 4,200. Run it for main (spill files) against main_nospill (the plain cut) at that ceiling; at the real ceiling
+# (40,000) nothing is cut and both arms should pass.
+#
+# s01-s03 hinge on project conventions that only the column comments state (none of these columns appears in
+# kb/); s04 asks for a standard SAP field, which a model may know without reading the comment: the control case.
+
+suite: spill_v1
+as_of: "2026-09-21"
+data_snapshot: {profile: small, generator_version: 0.8.0, seed: 20260924}
+
+cases:
+  - id: s01
+    question: >-
+      In raw_sap_ewm.scwm_ordim_c, which column records the resource a warehouse task was executed with (an RF
+      device or an AutoStore port)? How many distinct resources appear on confirmed tasks of warehouse SZ01?
+    role: ops_analyst_global
+    category: unfamiliar
+    expected_behavior: answer
+    acceptable_behaviors: [answer, answer_with_assumption]
+    required_tables: [raw_sap_ewm.scwm_ordim_c]
+    notes: The resource is prsrc (comment "Resource used (RF device or AutoStore port)"), past the cut.
+    reference_sql: |
+      SELECT COUNT(DISTINCT prsrc) AS distinct_resources
+      FROM raw_sap_ewm.scwm_ordim_c
+      WHERE lgnum = 'SZ01' AND tostat = 'C' AND TRIM(prsrc) <> ''
+    answer:
+      values: [{column: distinct_resources, abs: 0}]
+      must_mention: [[prsrc]]
+
+  - id: s02
+    question: >-
+      In raw_sap_ewm.scwm_ordim_c, which column holds the confirmation time in the warehouse's own time zone?
+      Using it, on how many distinct local calendar days were tasks of warehouse RR01 confirmed?
+    role: ops_analyst_global
+    category: unfamiliar
+    expected_behavior: answer
+    acceptable_behaviors: [answer, answer_with_assumption]
+    required_tables: [raw_sap_ewm.scwm_ordim_c]
+    notes: >-
+      confirmed_at_wh (comment "Confirmation timestamp in the warehouse time zone"), a DECIMAL(15,0)
+      yyyymmddhhmmss stamp; confirmed tasks only (tostat C), since confirmed_at also stamps cancellations.
+    reference_sql: |
+      SELECT COUNT(DISTINCT SUBSTR(CAST(confirmed_at_wh AS STRING), 1, 8)) AS local_days
+      FROM raw_sap_ewm.scwm_ordim_c
+      WHERE lgnum = 'RR01' AND tostat = 'C' AND confirmed_at_wh > 0
+    answer:
+      values: [{column: local_days, abs: 0}]
+      must_mention: [[confirmed_at_wh]]
+
+  - id: s03
+    question: >-
+      In raw_sap_ecc.mseg, which column holds the time an item was entered into the system, and in which clock
+      is that time recorded (site-local time or system time)? By that clock, how many items at plant CN10 were
+      entered before 06:00?
+    role: ops_analyst_global
+    category: unfamiliar
+    expected_behavior: answer
+    acceptable_behaviors: [answer, answer_with_assumption]
+    required_tables: [raw_sap_ecc.mseg]
+    notes: >-
+      cputm_mkpf (comment "Entry time copied from the header (ECC system time)"), an HHMMSS string; the posting
+      date budat_mkpf is site-local, the entry date and time are system time.
+    reference_sql: |
+      SELECT COUNT(*) AS items_before_six
+      FROM raw_sap_ecc.mseg
+      WHERE werks = 'CN10' AND cputm_mkpf < '060000'
+    answer:
+      values: [{column: items_before_six, abs: 0}]
+      must_mention: [[cputm_mkpf], [system time, ECC time, server time]]
+
+  - id: s04
+    question: >-
+      In raw_sap_ecc.mseg, which column names the material document that an item reverses? How many items at
+      plant US10 reverse another material document?
+    role: ops_analyst_global
+    category: unfamiliar
+    expected_behavior: answer
+    acceptable_behaviors: [answer, answer_with_assumption]
+    required_tables: [raw_sap_ecc.mseg]
+    notes: >-
+      smbln, a standard SAP field (comment "Material document being reversed; blank for non-reversal items"):
+      the control case, answerable from SAP knowledge without the comment.
+    reference_sql: |
+      SELECT COUNT(*) AS reversal_items
+      FROM raw_sap_ecc.mseg
+      WHERE werks = 'US10' AND TRIM(smbln) <> ''
+    answer:
+      values: [{column: reversal_items, abs: 0}]
+      must_mention: [[smbln]]

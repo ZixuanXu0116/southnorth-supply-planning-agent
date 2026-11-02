@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/ZixuanXu0116/southnorth-supply-planning-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/ZixuanXu0116/southnorth-supply-planning-agent/actions/workflows/ci.yml)
 
-A supply-planning copilot on synthetic SAP-shaped data: a deterministic engine flags parts that will run short, AI agents prepare each case (the supplier request, options priced with their stock-out risk, a ranked recommendation), and people make every decision.
+A supply-planning copilot on synthetic SAP-shaped data: a deterministic engine flags parts that will run short, AI agents prepare each case (the supplier request, the supplier's quotes read from any file, options priced with their stock-out risk, a ranked recommendation), and people make every decision.
 
 > This repo mostly shows recommendations. At work I also build chat agents for purchasing and for suppliers on the same kind of semantic layer, knowledge base and harness, every answer traced and logged, to support decisions with more tailored information. I have not rebuilt that part here yet.
 
@@ -14,73 +14,47 @@ A supply-planning copilot on synthetic SAP-shaped data: a deterministic engine f
 flowchart TB
   purchasing(["Purchasing"])
   suppliers(["Suppliers"])
-  analysts(["Analysts"])
   pages["Case pages"]
   planner["Planner agent<br/>drafts requests, recommends"]
-  intake["Intake agent<br/>planned"]
-  caseserver["Case server<br/>prices options, append-only events"]
+  extractor["Extractor<br/>reads PDFs, screenshots, Excel"]
+  caseserver["Case server<br/>prices options, checks every write,<br/>append-only events"]
   engine["Replenishment engine<br/>deterministic"]
-  dataagent["Data agent<br/>answers with cited SQL"]
-  toolserver["Data tool server<br/>read-only SQL guard"]
-  lake[("Databricks<br/>synthetic SAP data, metric views,<br/>grants, row filters, masks")]
+  lake[("Databricks<br/>synthetic SAP data, tables, volumes,<br/>grants, row filters, masks")]
 
   purchasing --> pages
   suppliers --> pages
-  pages --> caseserver
   pages --> planner
-  planner --> caseserver
-  intake -.-> caseserver
+  pages --> extractor
+  planner -- "MCP" --> caseserver
+  pages --> caseserver
   lake --> engine
   engine -- "cases" --> caseserver
   caseserver --> lake
-  analysts --> dataagent
-  dataagent --> toolserver
-  toolserver --> lake
 ```
 
-- **The engine flags, the agents prepare, people decide.** The planner agent drafts the supplier request and recommends an option with its reasons; no agent can send, order, or accept a price.
-- **Numbers come from tools, not the model.** The engine and the case server compute costs and stock-out risks, and the planner writes no SQL. The data agent asks governed metric views, whose SQL the server writes; only for a question no metric covers does it write its own read-only SQL, which is checked, run under the role's identity, and shown with the answer ([example](docs/images/question-page.png)).
-- **The intake agent is a careful messenger.** Its own context and permissions (one case's outward fields, no data): it carries the request out and the offers back, never commits or judges, and escalates anything uncertain to the planner and purchasing.
+1. The engine opens a case when projected stock falls short and dates its options (order, expedite, transfer) from today.
+2. The planner agent drafts the supplier request; purchasing approves it with a mandate (latest arrival, surcharge and freight ceilings).
+3. The supplier answers with the request sheet (read by code) or its own PDF, screenshot, or Excel (read by the extractor into a draft that purchasing confirms field by field).
+4. The case server prices each quote: coverage, stock-out risk from a demand model, cost against the standard price, expected spend, mandate checks; it ranks them by expected cost.
+5. The planner recommends one and explains the trade-off; a line written by the server states the recommended option's facts. Purchasing decides among the quotes or doing nothing, and the system hands off to logistics.
 
-## Design in brief
+**Design in brief**
 
-```mermaid
-flowchart TB
-  subgraph prefix["Stable prefix: cached, never edited"]
-    prompt["Prompt file<br/>prompts/agent/vN.md"]
-    tools["Tool definitions<br/>listed once, frozen"]
-    pointers["Pointers<br/>KB index · case id · as-of date · role"]
-  end
-  model(("LLM"))
-  subgraph stores["Files and stores: read by reference"]
-    kb["kb/*.md<br/>kb_search · kb_read"]
-    results["Query results<br/>result_id · get_result"]
-    cases["Case store events<br/>get_case · evaluate_option"]
-  end
-  hooks{{"Harness hooks<br/>budgets · output cap · gate · one repair"}}
-  out["One terminal write<br/>submit_answer or one case event"]
-  run["Run files<br/>prompt.md · trace.jsonl · result.json"]
+- **Numbers come from code, not the model.** The planner reads, compares, and explains; every figure it cites comes from a tool, and the case server refuses a write whose ids or order do not match its own evaluation.
+- **The loop is thin and visible.** A TypeScript harness on PI's agent core: a fixed prompt, a tool set chosen per task, hooks before every tool call (one write per task, alone in its turn; budgets), and a trace of every turn.
+- **Isolation.** Python tools run as MCP servers in their own processes (or containers) with only their own credentials; the model's key never reaches them. Supplier text and documents are data, never instructions.
+- **Measured change.** Every fix starts from a traced failure (a failure card), is replayed before and after, and stays as a regression test.
 
-  prefix --> model
-  model -- "tool call" --> hooks
-  hooks --> stores
-  stores -- "small result + handle" --> model
-  model --> out
-  hooks -. "every step" .-> run
-  sub["Explorer · Verifier<br/>on demand, parallel, own context"]
-  model -. "hard, high-stakes" .-> sub
-  sub -. "structured reports" .-> model
-```
+Technical details: [`docs/TECHNICAL.md`](docs/TECHNICAL.md) · decisions: [`docs/decisions/`](docs/decisions/).
 
-- **Context:** a small, stable prefix (prompt file, frozen tool set, pointers); knowledge, query results, and case state stay in files and stores, read by reference.
-- **Caching:** the prefix is byte-stable and the transcript append-only, so 85–91 % of input tokens are read from the cache.
-- **Memory:** sessions are short, cases remember in an append-only event store, and knowledge changes only through reviewed failure cards; agents never write their own memory.
-- **Loop:** the harness, on PI's agent core, owns budgets, one terminal write, a faithfulness gate on every number, and one repair prompt.
-- **Compaction last:** small outputs at the source, overflow saved to files behind a pointer, and a fresh session from a handoff document only as the last resort.
-- **Sub-agents on demand:** a verifier checks a planner recommendation in its own context, only when it departs from purchasing's order, misses its service target, or is high value (built, being measured); an explorer for unfamiliar data is designed.
-- **Isolation:** TypeScript harness; Python tools over MCP in separate processes, each with only its own credentials; no agent can run code or write data outside the case store.
+## How it is evaluated
 
-Technical details: [`docs/TECHNICAL.md`](docs/TECHNICAL.md).
+- **Decision quality (regret).** Each decision is priced afterwards on the demand that actually followed: an option costs its own cost (surcharge, freight, price difference, order and holding cost) plus a line-down cost for each day the stock would have been short. The cheapest option in hindsight is the oracle:
+
+  `regret = cost of the chosen option − cost of the hindsight-cheapest option`
+
+- **Trace soundness (planned).** Every run leaves a trace of its turns and tool calls. Each trace will be checked against the steps a sound solution takes (read the case before pricing it, rank before recommending, cite the server's evaluation ids, end with one write on its own), to catch a right answer reached the wrong way.
+- **Supplier documents (field accuracy).** Documents with known answers (PDFs, screenshots, scans, the supplier's own Excel): `field accuracy = fields read correctly / fields in the document`.
 
 ## Try it locally
 
@@ -94,13 +68,13 @@ uv run snm-data plan --from-profile small   # the engine opens the cases
 uv run snm-web serve                        # open http://127.0.0.1:8000 and choose Purchasing
 ```
 
-The planner buttons also need Node 22 (`npm ci && npm run build -w harness`) and an Anthropic key (`SNM_ANTHROPIC_API_KEY`, `SNM_MODEL_MAIN`); the data agent needs a Databricks workspace ([developer guide](docs/DEVELOPMENT.md)). This is a design and workflow demo that runs locally, not a hosted service.
+The agents also need Node 22 (`npm ci && npm run build -w harness`) and an Anthropic key (`SNM_ANTHROPIC_API_KEY`, `SNM_MODEL_MAIN`). One MCP server per container (Docker Compose) and a Databricks App deployment: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
-## Status (2026-10-29)
+## Status (2026-11-02)
 
-- **Built:** engine, case store, purchasing and supplier pages, planner agent, data agent, governance, evaluation, spill files, and thread handoffs; runs locally and on Databricks Free Edition.
-- **In progress:** the intake agent (its case-server side is built); an improvement loop that turns failures into reviewed fixes; the planner's verifier (built, being measured).
-- **Planned:** questions inside a case thread for purchasing and suppliers; explorer.
+- **Built:** engine, case store, purchasing and supplier pages, planner agent, supplier-document extractor, data agent, governance, evaluations, containers, Databricks App.
+- **In progress:** the intake agent (its case-server side is built); an improvement loop that turns failures into reviewed fixes.
+- **Planned:** questions inside a case thread for purchasing and suppliers; supplier replies by email.
 
 ## How this was built
 

@@ -18,6 +18,17 @@ from .snapshot import verify_loaded_snapshot
 from .tracking import configure_tracking, default_experiment, upload_batch
 
 
+def _planning(given: str | None) -> Path:
+    """The planning run a planner suite plays in (default: the latest under out/planning/). Its as-of date
+    becomes the case server's today (``SNM_CASE_TODAY``) unless one is set: the suite's supplier dates and
+    validity are drawn in that world, and the engine's levers are dated from it."""
+    from .flow import pin_world_day
+
+    planning = Path(given) if given else sorted((REPO_ROOT / "out" / "planning").glob("*"))[-1]
+    pin_world_day(planning)
+    return planning
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="snm-evals", description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -60,13 +71,13 @@ def main(argv: list[str] | None = None) -> None:
     planner.add_argument("--per-lever", type=int, default=3)
     planner.add_argument("--parallel", type=int, default=3)
     planner.add_argument("--batch", default="planner-prepare")
-    planner.add_argument("--prompt-version", default="v5")
+    planner.add_argument("--prompt-version", default="v6")
     planner.add_argument("--report", action="store_true", help="also write the report to evals/reports/")
     evaluate = commands.add_parser(
         "planner-evaluate", help="evaluate the planner's evaluate task per prompt version (paired)"
     )
     evaluate.add_argument("--planning", help="local planning run (default: latest out/planning/*)")
-    evaluate.add_argument("--versions", nargs="+", default=["v5"])
+    evaluate.add_argument("--versions", nargs="+", default=["v6"])
     evaluate.add_argument("--per-mix", type=int, default=3)
     evaluate.add_argument("--parallel", type=int, default=3)
     evaluate.add_argument("--batch", default="planner-evaluate")
@@ -79,7 +90,26 @@ def main(argv: list[str] | None = None) -> None:
     mutate.add_argument("--parallel", type=int, default=3)
     mutate.add_argument("--max-usd", type=float, default=5.0, help="stop verifying once this much is spent")
     mutate.add_argument("--batch", default="verifier-mutations")
+    mutate.add_argument(
+        "--from-store", help="mutate the recommendations already in this store (no planner runs)"
+    )
+    mutate.add_argument("--only", nargs="+", help="the mutations to run (default: all that apply)")
     mutate.add_argument("--report", action="store_true", help="also write the report to evals/reports/")
+    form = commands.add_parser(
+        "verifier-form", help="the planner's check forms (none, deterministic, self-check, sub-agent), paired"
+    )
+    form.add_argument("--planning", help="local planning run (default: latest out/planning/*)")
+    form.add_argument(
+        "--auditor-model", required=True, help="model of the auditor, another tier than arm D's"
+    )
+    form.add_argument("--arms", nargs="+", default=["none", "deterministic", "self_check", "subagent"])
+    form.add_argument("--versions", nargs="+", default=["v6"], help="planner prompt versions to compare")
+    form.add_argument("--repetitions", type=int, default=1)
+    form.add_argument("--per-mix", type=int, default=3)
+    form.add_argument("--parallel", type=int, default=4)
+    form.add_argument("--max-usd", type=float, default=5.0, help="stop planning once this much is spent")
+    form.add_argument("--batch", default="verifier-form")
+    form.add_argument("--report", action="store_true", help="also write the report to evals/reports/")
     improve = commands.add_parser(
         "improve", help="the semi-automatic improvement loop (decision record 009)"
     ).add_subparsers(dest="step", required=True)
@@ -104,22 +134,59 @@ def main(argv: list[str] | None = None) -> None:
     decide.add_argument("--note", default="", help="the owner's reason or, for iterate, what to change")
     intake = improve.add_parser("intake", help="cards from flagged answers of the question page")
     intake.add_argument("path", type=Path, help="runs/ask/flags.jsonl or a downloaded thread JSON")
+    docs = commands.add_parser("documents", help="supplier documents: code-only vs. model extractors")
+    docs.add_argument("--batch", required=True)
+    docs.add_argument("--arms", default="rules,claude-haiku-5-5,claude-sonnet-5-5,claude-opus-5-5")
+    docs.add_argument("--effort", default="low")
+    docs.add_argument("--only", nargs="*", help="document name prefixes")
+    docs.add_argument("--report", action="store_true", help="write evals/reports/<batch>.md")
     args = parser.parse_args(argv)
 
     load_env_file(REPO_ROOT / ".env")
     if args.command == "improve":
         _improve(args)
         return
+    if args.command == "documents":
+        from .documents import SET_DIR, render_documents_report, run_suite
+
+        rows = run_suite(SET_DIR, args.arms.split(","), args.effort, RUNS_ROOT / args.batch, args.only)
+        report = render_documents_report(rows, args.effort)
+        print(report)
+        if args.report:
+            (EVALS_ROOT / "reports" / f"{args.batch}.md").write_text(report, encoding="utf-8")
+        return
+    if args.command == "verifier-form":
+        from .verifier_form import render as render_form
+        from .verifier_form import run_form_suite
+
+        planning = _planning(args.planning)
+        cost = REPO_ROOT / "out" / "small" / "raw_ext" / "cost_parameter.parquet"
+        out_dir = RUNS_ROOT / args.batch
+        rows, spent = run_form_suite(
+            planning, cost, out_dir, args.auditor_model, args.arms, args.per_mix, args.parallel, args.max_usd,
+            versions=args.versions, repetitions=args.repetitions,
+        )  # fmt: skip
+        report = render_form(rows, spent, args.auditor_model)
+        print(report)
+        if args.report:
+            (EVALS_ROOT / "reports" / f"{args.batch}.md").write_text(report, encoding="utf-8")
+        return
     if args.command == "verifier-mutations":
         from .verifier_mutations import render as render_mutations
         from .verifier_mutations import run_mutation_suite
 
-        planning = (
-            Path(args.planning) if args.planning else sorted((REPO_ROOT / "out" / "planning").glob("*"))[-1]
-        )
+        planning = _planning(args.planning)
         cost = REPO_ROOT / "out" / "small" / "raw_ext" / "cost_parameter.parquet"
         out_dir = RUNS_ROOT / args.batch
-        rows = run_mutation_suite(planning, cost, out_dir, args.per_mix, args.parallel, args.max_usd)
+        if args.from_store:
+            from .verifier_mutations import MUTATIONS, run_on_store
+
+            names = args.only or list(MUTATIONS)
+            rows = run_on_store(
+                Path(args.from_store), planning, cost, out_dir, names, args.parallel, args.max_usd
+            )
+        else:
+            rows = run_mutation_suite(planning, cost, out_dir, args.per_mix, args.parallel, args.max_usd)
         spent = json.loads((out_dir / "spent.json").read_text(encoding="utf-8"))["usd"]
         report = render_mutations(rows, spent)
         print(report)
@@ -130,9 +197,7 @@ def main(argv: list[str] | None = None) -> None:
         from .planner_evaluate import render as render_evaluate
         from .planner_evaluate import run_evaluate_suite
 
-        planning = (
-            Path(args.planning) if args.planning else sorted((REPO_ROOT / "out" / "planning").glob("*"))[-1]
-        )
+        planning = _planning(args.planning)
         cost = REPO_ROOT / "out" / "small" / "raw_ext" / "cost_parameter.parquet"
         rows = run_evaluate_suite(
             planning, cost, RUNS_ROOT / args.batch, args.versions, args.per_mix, args.parallel
@@ -145,9 +210,7 @@ def main(argv: list[str] | None = None) -> None:
     if args.command == "planner":
         from .planner import render, run_prepare_suite
 
-        planning = (
-            Path(args.planning) if args.planning else sorted((REPO_ROOT / "out" / "planning").glob("*"))[-1]
-        )
+        planning = _planning(args.planning)
         cost = REPO_ROOT / "out" / "small" / "raw_ext" / "cost_parameter.parquet"
         rows = run_prepare_suite(
             planning,

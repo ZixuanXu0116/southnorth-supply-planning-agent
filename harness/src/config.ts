@@ -112,6 +112,33 @@ export function readImproverModel(env: Env = process.env): ModelRole {
 }
 
 /**
+ * The planner's model for one task: the main model, with the task's own effort when one is set
+ * (`SNM_EFFORT_MAIN_PREPARE`, `SNM_EFFORT_MAIN_EVALUATE`, `SNM_EFFORT_MAIN_HANDOFF`; the owner, 2026-11-02:
+ * effort by the task's complexity), else `SNM_EFFORT_MAIN`.
+ */
+export function plannerModelFor(main: ModelRole, task: string, env: Env = process.env): ModelRole {
+	const name = `SNM_EFFORT_MAIN_${task.toUpperCase()}`;
+	const effort = env[name]?.trim();
+	if (!effort) return main;
+	if (!Value.Check(EffortSchema, effort)) throw new ConfigError(`${name} is not an effort level: ${effort}.`);
+	return { ...main, effort: effort as ModelRole["effort"] };
+}
+
+/**
+ * The supplier-document extractor (change card change-20261102-supplier-documents): `SNM_MODEL_EXTRACTOR`,
+ * else the explorer's model (the cheaper tier); effort `SNM_EFFORT_EXTRACTOR`, else low.
+ */
+export function readExtractorModel(env: Env = process.env): ModelRole {
+	const modelId = env.SNM_MODEL_EXTRACTOR?.trim() || env.SNM_MODEL_EXPLORER?.trim();
+	if (!modelId) {
+		throw new ConfigError("Missing environment variable SNM_MODEL_EXTRACTOR or SNM_MODEL_EXPLORER (model ID for the extractor).");
+	}
+	const effort = env.SNM_EFFORT_EXTRACTOR?.trim() || "low";
+	if (!Value.Check(EffortSchema, effort)) throw new ConfigError(`SNM_EFFORT_EXTRACTOR is not an effort level: ${effort}.`);
+	return { provider: env.SNM_MODEL_PROVIDER?.trim() || "anthropic", modelId, effort };
+}
+
+/**
  * Environment variable holding the harness's Anthropic API key. A project-specific name keeps
  * the key separate from `ANTHROPIC_API_KEY`, which Claude Code and SDK defaults pick up implicitly.
  * The key is returned on its own and never stored in `HarnessConfig`, which may be logged.

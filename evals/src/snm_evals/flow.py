@@ -19,6 +19,7 @@ import argparse
 import hashlib
 import io
 import json
+import os
 import time
 from dataclasses import dataclass, field
 from datetime import date, timedelta
@@ -409,6 +410,15 @@ def render(runs: list[CaseRun], title: str, store: str) -> str:
     return "\n".join(lines) + "\n"
 
 
+def pin_world_day(planning_dir: Path) -> None:
+    """Make the planning run's as-of date the case server's today (``SNM_CASE_TODAY``) unless one is set: a
+    simulated world draws its supplier dates and validity from that day, and the engine dates its levers
+    from it (the harness passes the setting on to the case servers it starts)."""
+    report = planning_dir / "plan_report.json"
+    if not os.environ.get("SNM_CASE_TODAY") and report.exists():
+        os.environ["SNM_CASE_TODAY"] = str(json.loads(report.read_text(encoding="utf-8"))["as_of"])
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="snm-sim", description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -434,6 +444,7 @@ def main(argv: list[str] | None = None) -> int:
         if out.exists() and any(out.iterdir()):
             raise SystemExit(f"{out} is not empty; pass a fresh --out directory")
         planning_dir = Path(args.planning) if args.planning else default_planning_dir()
+        pin_world_day(planning_dir)
         service = CaseService(LocalCaseStore(out), LocalPlanningData(planning_dir, COST_PARAMETER))
         print(json.dumps(service.sync_engine_run(f"sim-flow-{planning_dir.name}")))
         store = f"local store {out.relative_to(REPO_ROOT) if out.is_relative_to(REPO_ROOT) else out}"

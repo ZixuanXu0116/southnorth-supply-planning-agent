@@ -40,7 +40,8 @@ REC = {
 
 def test_each_mutation_carries_one_false_claim_with_evaluated_figures():
     variants = mutations(REC, RANKING)
-    assert set(variants) == {"figure", "mandate_claim", "omission", "cheapest_claim", "target_claim"}
+    expected = {"figure", "mandate_claim", "omission", "cheapest_claim", "target_claim"}
+    assert set(variants) == expected | {"overclaim", "wrong_difference"}
     assert variants["figure"]["rationale_text"] == "Recommend P-1-8: risk 14.88%, expected total 286.21 USD."
     assert variants["figure"]["recommended"] == REC["recommended"]
     mandate = variants["mandate_claim"]
@@ -53,6 +54,13 @@ def test_each_mutation_carries_one_false_claim_with_evaluated_figures():
     assert target["recommended"] == f"P-1-8-{CASE}"
     assert "11.88% meets the service target" in target["rationale_text"]
     assert all(v["options"] == REC["options"] for v in variants.values())
+    # Comparisons: P-1-8 is cheaper but riskier and later than P-1-10, so "better on every figure" is
+    # false; the true gap between the expected totals is 90.07 USD.
+    overclaim = variants["overclaim"]
+    assert overclaim["recommended"] == REC["recommended"]
+    assert "better than P-1-10 on every figure" in overclaim["rationale_text"]
+    wrong = variants["wrong_difference"]
+    assert "115.07 USD lower than P-1-10's 376.28 USD" in wrong["rationale_text"]
 
 
 def test_mutations_that_do_not_apply_are_left_out():

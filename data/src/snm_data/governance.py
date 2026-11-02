@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import os
 import re
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -119,7 +119,9 @@ ROLES: dict[str, Role] = {
             SITE_SCOPES,
             False,
             "The case server's identity: reads the planning tables and the case store, appends case events.",
-            provisioned=False,
+            # Provisioned 2026-11-01 for the deployed app (decision record 010): its principal is the app's
+            # own service principal, named in SNM_PRINCIPAL_CASE_WRITER.
+            provisioned=True,
             cost_access=True,
             writes=("cases",),
         ),
@@ -433,6 +435,14 @@ def _execute(cursor: Any, statements: Iterable[str], report: GovernReport, log: 
         log(statement.splitlines()[0])
 
 
+def principal_override(role: Role, env: Mapping[str, str] | None = None) -> str | None:
+    """The application ID of an existing service principal that serves ``role`` instead of the
+    ``snm-agent-<role>`` principal this module creates: ``SNM_PRINCIPAL_<ROLE>``. The deployed app's case
+    writer is the app's own service principal, which Databricks Apps creates (decision record 010)."""
+    value = (os.environ if env is None else env).get(f"SNM_PRINCIPAL_{role.name.upper()}", "").strip()
+    return value or None
+
+
 def _identities(client: Any) -> tuple[dict[str, Any], dict[str, Any]]:
     groups = {group.display_name: group for group in client.groups.list(attributes="id,displayName,members")}
     principals = {sp.display_name: sp for sp in client.service_principals.list()}
@@ -446,8 +456,12 @@ def ensure_identities(client: Any, warehouse_id: str, report: GovernReport, log:
     from databricks.sdk.service import sql as sqlsvc
 
     groups, principals = _identities(client)
+    by_application = {sp.application_id: sp for sp in principals.values()}
     for role in provisioned_roles():
-        principal = principals.get(role.service_principal)
+        override = principal_override(role)
+        if override and override not in by_application:
+            raise ValueError(f"no service principal with application ID {override} for {role.name}")
+        principal = by_application[override] if override else principals.get(role.service_principal)
         if principal is None:
             principal = client.service_principals.create(
                 display_name=role.service_principal,
@@ -459,7 +473,7 @@ def ensure_identities(client: Any, warehouse_id: str, report: GovernReport, log:
         group = groups.get(role.group)
         if group is None:
             client.groups.create(display_name=role.group, members=[iam.ComplexValue(value=principal.id)])
-            report.actions.append(f"created group {role.group} with {role.service_principal}")
+            report.actions.append(f"created group {role.group} with {principal.display_name}")
             log(report.actions[-1])
         elif principal.id not in {member.value for member in group.members or []}:
             client.groups.patch(
@@ -467,7 +481,7 @@ def ensure_identities(client: Any, warehouse_id: str, report: GovernReport, log:
                 operations=[iam.Patch(op=iam.PatchOp.ADD, path="members", value=[{"value": principal.id}])],
                 schemas=[iam.PatchSchema.URN_IETF_PARAMS_SCIM_API_MESSAGES_2_0_PATCH_OP],
             )
-            report.actions.append(f"added {role.service_principal} to {role.group}")
+            report.actions.append(f"added {principal.display_name} to {role.group}")
             log(report.actions[-1])
     client.warehouses.update_permissions(
         warehouse_id,
@@ -483,11 +497,12 @@ def ensure_identities(client: Any, warehouse_id: str, report: GovernReport, log:
 def role_principals(client: Any) -> dict[str, str]:
     """Application IDs of the existing role service principals, by role name."""
     _, principals = _identities(client)
-    return {
+    found = {
         role.name: principals[role.service_principal].application_id
         for role in provisioned_roles()
         if role.service_principal in principals
     }
+    return {**found, **{role.name: o for role in provisioned_roles() if (o := principal_override(role))}}
 
 
 def _rows(cursor: Any, sql: str) -> list[tuple]:
@@ -585,7 +600,7 @@ def govern(
             name
             for role in provisioned_roles()
             for name, known in ((role.group, groups), (role.service_principal, principals))
-            if name not in known
+            if name not in known and not (known is principals and principal_override(role))
         ]
         if check_only:
             report.drift += [f"missing identity {name}" for name in missing]

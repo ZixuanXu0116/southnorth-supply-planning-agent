@@ -9,6 +9,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from .http import request_header
+
 
 class AuditLog:
     def __init__(self, path: Path | None):
@@ -29,5 +31,9 @@ class AuditLog:
         if self.path is None:
             return
         entry = {"ts": datetime.now(UTC).isoformat(timespec="milliseconds"), **fields}
+        # Over HTTP one server serves many runs; the harness names the run in a header (decision record 010).
+        run_id = request_header("x-snm-run-id")
+        if run_id and "run_id" not in entry:
+            entry["run_id"] = run_id
         with self._lock, self.path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(entry, default=str) + "\n")

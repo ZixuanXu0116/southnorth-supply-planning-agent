@@ -87,11 +87,16 @@ def shape(tables: dict[str, pl.DataFrame]) -> str:
             f"{(sub['order_days'] == 0).mean():.0%}."
         )
     sh = df.filter(pl.col("condition") == "shortage")
-    out.append("\nShortage cases by the shape of the trailing demand (one day holding at least half of the window's outflow):\n")
+    out.append(
+        "\nShortage cases by the shape of the trailing demand (one day holding at least half of the window's outflow):\n"
+    )
     out.append(
         _table(
             sh.with_columns(
-                pl.when(pl.col("max_share") >= 0.5).then(pl.lit("one order dominates")).otherwise(pl.lit("spread")).alias("trailing demand")
+                pl.when(pl.col("max_share") >= 0.5)
+                .then(pl.lit("one order dominates"))
+                .otherwise(pl.lit("spread"))
+                .alias("trailing demand")
             )
             .group_by("trailing demand")
             .agg(pl.len().alias("cases"), pl.col("below_zero").mean().round(3).alias("went below zero"))
@@ -102,23 +107,41 @@ def shape(tables: dict[str, pl.DataFrame]) -> str:
     out.append(
         _table(
             sh.with_columns(
-                pl.when(pl.col("days_to_trigger") <= 14).then(pl.lit("within 14 days"))
-                .when(pl.col("days_to_trigger") <= 42).then(pl.lit("15 to 42 days"))
-                .otherwise(pl.lit("beyond 42 days")).alias("horizon")
+                pl.when(pl.col("days_to_trigger") <= 14)
+                .then(pl.lit("within 14 days"))
+                .when(pl.col("days_to_trigger") <= 42)
+                .then(pl.lit("15 to 42 days"))
+                .otherwise(pl.lit("beyond 42 days"))
+                .alias("horizon")
             )
             .group_by("horizon")
-            .agg(pl.len().alias("cases"), pl.col("below_zero").mean().round(3).alias("went below zero"), (pl.col("oracle") == "do_nothing").mean().round(3).alias("oracle: do nothing"))
+            .agg(
+                pl.len().alias("cases"),
+                pl.col("below_zero").mean().round(3).alias("went below zero"),
+                (pl.col("oracle") == "do_nothing").mean().round(3).alias("oracle: do nothing"),
+            )
             .sort("went below zero", descending=True)
         )
     )
     out.append("\nShortage cases by criticality:\n")
-    out.append(_table(sh.group_by("criticality").agg(pl.len().alias("cases"), pl.col("below_zero").mean().round(3).alias("went below zero")).sort("criticality")))
+    out.append(
+        _table(
+            sh.group_by("criticality")
+            .agg(pl.len().alias("cases"), pl.col("below_zero").mean().round(3).alias("went below zero"))
+            .sort("criticality")
+        )
+    )
     wa = df.filter(pl.col("condition") == "warning")
     out.append("\nWarning cases by order days in the trailing window:\n")
     out.append(
         _table(
             wa.with_columns(
-                pl.when(pl.col("order_days") == 0).then(pl.lit("0")).when(pl.col("order_days") <= 2).then(pl.lit("1 to 2")).otherwise(pl.lit("3 or more")).alias("order days")
+                pl.when(pl.col("order_days") == 0)
+                .then(pl.lit("0"))
+                .when(pl.col("order_days") <= 2)
+                .then(pl.lit("1 to 2"))
+                .otherwise(pl.lit("3 or more"))
+                .alias("order days")
             )
             .group_by("order days")
             .agg(pl.len().alias("cases"), pl.col("below_zero").mean().round(3).alias("went below zero"))

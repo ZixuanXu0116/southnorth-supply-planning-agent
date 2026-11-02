@@ -27,3 +27,6 @@ runs/
 .DS_Store
 .idea/
 .vscode/
+
+# Per-container settings written by deploy/make_env.py
+deploy/env/

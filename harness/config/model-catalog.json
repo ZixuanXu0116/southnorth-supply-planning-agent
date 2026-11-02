@@ -5,10 +5,32 @@
       "provider": "anthropic",
       "id": "claude-sonnet-5-5",
       "base": "claude-sonnet-5",
-      "source": "Anthropic Models API and pricing page, checked 2026-09-28",
+      "source": "Anthropic pricing page, checked 2026-11-02 (cache hits 0.05x base input)",
       "overrides": {
         "name": "Claude Sonnet 5.5",
-        "cost": { "input": 2, "output": 10, "cacheRead": 0.2, "cacheWrite": 2.5 },
+        "cost": {
+          "input": 2,
+          "output": 10,
+          "cacheRead": 0.1,
+          "cacheWrite": 2.5
+        },
+        "contextWindow": 1000000,
+        "maxTokens": 128000
+      }
+    },
+    {
+      "provider": "anthropic",
+      "id": "claude-haiku-5-5",
+      "base": "claude-opus-5-5",
+      "source": "Anthropic pricing page and models overview, checked 2026-11-02 (prompts up to 100,000 tokens; adaptive thinking only, like the base)",
+      "overrides": {
+        "name": "Claude Haiku 5.5",
+        "cost": {
+          "input": 0.1,
+          "output": 0.5,
+          "cacheRead": 0.01,
+          "cacheWrite": 0.125
+        },
         "contextWindow": 1000000,
         "maxTokens": 128000
       }

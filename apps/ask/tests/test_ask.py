@@ -224,3 +224,20 @@ def test_markdown_subset_escapes_everything_else():
     assert "<ul><li>one &lt;b&gt;</li><li>two</li></ul>" in html
     assert "<th>Week</th>" in html and "<td>44</td>" in html and "---" not in html
     assert "<img" not in html and "&lt;img" in html
+
+
+def test_a_remote_tool_server_needs_its_token_but_no_databricks_settings(monkeypatch):
+    # Decision record 010: the role's tool server runs in its own container, which alone holds the
+    # credentials.
+    rr_credentials = agent.role_environment("site_manager_rr")
+    for name in [*agent.AGENT_ENVIRONMENT, "SNM_TOOL_SERVER_TOKEN", *rr_credentials]:
+        monkeypatch.delenv(name, raising=False)
+    for name in agent.MODEL_ENVIRONMENT:
+        monkeypatch.setenv(name, "set")
+    monkeypatch.setenv("SNM_TOOL_SERVER_URL_OPS_ANALYST_GLOBAL", "http://tool-server-ops:8000/mcp")
+    assert agent.missing_environment("ops_analyst_global") == ["SNM_TOOL_SERVER_TOKEN"]
+    assert agent.missing_environment() == ["SNM_TOOL_SERVER_TOKEN"]
+    monkeypatch.setenv("SNM_TOOL_SERVER_TOKEN", "set")
+    assert agent.missing_environment("ops_analyst_global") == []
+    # A role without its own server still needs the Databricks settings and its credentials.
+    assert "SNM_DATABRICKS_CLIENT_ID_SITE_MANAGER_RR" in agent.missing_environment("site_manager_rr")

@@ -12,4 +12,4 @@ columns:
   - {name: value, type: "DECIMAL(15,2)", nullable: false, sensitivity: commercial, comment: "Parameter value in the stated unit."}
   - {name: unit, type: STRING, nullable: false, comment: "Unit of the value."}
   - {name: description, type: STRING, nullable: false, comment: "What the parameter means."}
-access: [purchasing]
+access: [purchasing, case_writer]

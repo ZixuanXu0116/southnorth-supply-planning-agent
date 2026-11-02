@@ -23,8 +23,9 @@ import { Agent, type AgentTool, type StreamFn } from "@earendil-works/pi-agent-c
 import type { Api, AssistantMessage, Model } from "@earendil-works/pi-ai";
 import { streamSimple } from "@earendil-works/pi-ai/compat";
 import type { Budget, ModelRole } from "../config.js";
-import { McpToolBridge, McpToolError } from "../mcp/bridge.js";
-import { REPO_ROOT, snmToolServerLaunch, type ToolServerLaunch } from "../mcp/tool-server.js";
+import { McpToolBridge, McpToolError, type ServerEndpoint } from "../mcp/bridge.js";
+import { remoteToolServer } from "../mcp/remote.js";
+import { REPO_ROOT, snmToolServerLaunch } from "../mcp/tool-server.js";
 import { resolveModel } from "../models.js";
 import { createAnswerTool, type SubmittedAnswer } from "./answer-tool.js";
 import { checkFaithfulness, type FaithfulnessReport, rejectionMessage, type StoredRows } from "./faithfulness.js";
@@ -81,6 +82,8 @@ export const ARMS = {
 	main: { ...MAIN, metadata: "full", spillFiles: true },
 	/** The candidate arm of that change card, kept so its reports can be rerun; now the same as `main`. */
 	main_spill: { ...MAIN, metadata: "full", spillFiles: true },
+	/** `main` with the plain cut instead of spill files: the control of the spill suite (evals/cases/spill_v1.yaml). */
+	main_nospill: { ...MAIN, metadata: "full" },
 	main_v2: { ...MAIN, promptVersion: "v2", excludedTools: METRIC_TOOLS, metadata: "full" },
 	main_v1: {
 		prompt: "main",
@@ -123,7 +126,7 @@ export interface RunOptions {
 	/** Test hooks: replace the provider stream, the resolved model, or the tool-server launch. */
 	streamFn?: StreamFn;
 	resolvedModel?: Model<Api>;
-	toolServer?: ToolServerLaunch;
+	toolServer?: ServerEndpoint;
 }
 
 export interface UsageTotals {
@@ -335,8 +338,14 @@ export async function runQuestion(options: RunOptions): Promise<RunResult> {
 	const spill = arm.spillFiles ? new SpillStore(join(runDir, "spill")) : undefined;
 	let bridge: McpToolBridge | undefined;
 	try {
+		// A tool server in its own container (decision record 010) serves full metadata and keeps its own audit log.
+		const remote = options.toolServer ? undefined : remoteToolServer(options.role, runId);
+		if (remote && arm.metadata !== "full") {
+			throw new Error(`Arm ${options.arm} needs ${arm.metadata} metadata; run it with the tool server over stdio.`);
+		}
 		bridge = await McpToolBridge.connect(
 			options.toolServer ??
+				remote ??
 				snmToolServerLaunch({ role: options.role, auditDir: join(runDir, "audit"), metadata: arm.metadata }),
 			{ maxResultChars: options.budgets.maxToolOutputChars, ...(spill ? { spill } : {}) },
 		);

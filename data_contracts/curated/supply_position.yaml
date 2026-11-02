@@ -30,4 +30,4 @@ columns:
   - {name: max_stock_qty, type: DOUBLE, nullable: false, comment: "Maximum stock level (MARC MABST)."}
   - {name: engine_version, type: STRING, nullable: false, comment: "Version of the replenishment engine."}
   - {name: params_digest, type: STRING, nullable: false, comment: "Digest of the engine parameters used."}
-access: [ops_analyst_global, site_manager_rr, site_manager_cn, purchasing]
+access: [ops_analyst_global, site_manager_rr, site_manager_cn, purchasing, case_writer]

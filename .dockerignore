@@ -1,0 +1,22 @@
+# Code only goes into the images (deploy/Dockerfile): no data, runs, credentials, or local builds.
+.git
+.github
+.venv
+**/__pycache__
+**/*.pyc
+.pytest_cache
+.ruff_cache
+node_modules
+**/node_modules
+harness/dist
+**/*.tsbuildinfo
+out
+runs
+mlruns
+.eval
+*.parquet
+.secrets
+.env
+.env.*
+deploy/env/*.env
+docs/images

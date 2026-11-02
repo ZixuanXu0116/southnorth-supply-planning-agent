@@ -1,4 +1,5 @@
-"""MCP server (stdio) for the case tools. Two profiles with disjoint tool sets (PROPOSAL §5.4, §5.5, §6):
+"""MCP server for the case tools: stdio by default, Streamable HTTP for the planner profile with
+SNM_MCP_TRANSPORT=http (decision record 010). Two profiles with disjoint tool sets (PROPOSAL §5.4, §5.5, §6):
 
 - ``planner``: list, read, explain, and evaluate cases; draft supplier requests, transfers, recommendations,
   decision requests, and handoffs; add notes. Runs under the role of the person it works for.
@@ -16,17 +17,26 @@ Configuration (environment variables):
     SNM_CASE_STORE     directory of the local case store (default out/cases)
     SNM_PLANNING_DIR   local planning run (default: the latest out/planning/<as-of>)
     SNM_COST_PARAMETER local cost_parameter parquet (default out/small/raw_ext/cost_parameter.parquet)
+    SNM_CASE_BACKEND   local (default: the settings above) or databricks (the cases schema and the curated
+                       planning tables; DATABRICKS_HOST, DATABRICKS_WAREHOUSE_ID, and the writer's
+                       DATABRICKS_CLIENT_ID / DATABRICKS_CLIENT_SECRET)
+    SNM_MCP_TRANSPORT  stdio (default) or http; over HTTP see ``snm_tools.http`` (SNM_SERVICE_TOKEN,
+                       SNM_MCP_HOST, SNM_MCP_PORT) and SNM_PLANNER_ROLES, the roles a request may name in
+                       X-SNM-Role (default purchasing); the run comes from X-SNM-Run-Id
 """
 
 from __future__ import annotations
 
 import json
 import os
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
+
+from snm_tools.http import headers_middleware, request_header, serve, transport
 
 from .planning import LocalPlanningData
 from .service import Actor, CaseError, CaseService
@@ -44,8 +54,14 @@ INTAKE_INSTRUCTIONS = (
 )
 
 
+ActorSource = Actor | Callable[[], Actor]
+
+
 def _call(function, **kwargs: Any) -> dict[str, Any]:
     try:
+        # Over HTTP the actor is resolved per request from the harness's headers (``http_planner_actor``).
+        if callable(kwargs.get("actor")):
+            kwargs["actor"] = kwargs["actor"]()
         result = function(**kwargs)
     except CaseError as error:
         raise ToolError(json.dumps({"error": error.code, "message": str(error)})) from error
@@ -67,6 +83,12 @@ def default_planning_dir() -> Path:
 
 
 def service_from_env() -> CaseService:
+    # The lakehouse store and planning tables (a deployed app): the cases schema, written as the identity in
+    # DATABRICKS_CLIENT_ID / DATABRICKS_CLIENT_SECRET (the app's service principal).
+    if os.environ.get("SNM_CASE_BACKEND", "local") == "databricks":
+        from .cli import _databricks_service
+
+        return _databricks_service()
     store = LocalCaseStore(Path(os.environ.get("SNM_CASE_STORE", REPO_ROOT / "out" / "cases")))
     planning_dir = (
         Path(os.environ["SNM_PLANNING_DIR"]) if os.environ.get("SNM_PLANNING_DIR") else default_planning_dir()
@@ -79,8 +101,24 @@ def service_from_env() -> CaseService:
     return CaseService(store, LocalPlanningData(planning_dir, cost))
 
 
-def build_planner(service: CaseService, actor: Actor) -> MCPServer:
-    server = MCPServer(name="snm-cases", instructions=PLANNER_INSTRUCTIONS, version="0.1.0")
+def http_planner_actor(allowed_roles: frozenset[str]) -> Callable[[], Actor]:
+    """The planner's actor over HTTP (decision record 010): the role and the run come from the request headers
+    the harness sets (``X-SNM-Role``, ``X-SNM-Run-Id``), behind the service token; a role outside
+    ``allowed_roles`` (``SNM_PLANNER_ROLES``) is refused."""
+
+    def resolve() -> Actor:
+        role = request_header("x-snm-role") or ""
+        if role not in allowed_roles:
+            raise CaseError("OUT_OF_SCOPE", f"Role {role or '(none)'} may not use this case server.")
+        return Actor("planner_agent", role, request_header("x-snm-run-id"))
+
+    return resolve
+
+
+def build_planner(service: CaseService, actor: ActorSource) -> MCPServer:
+    server = MCPServer(
+        name="snm-cases", instructions=PLANNER_INSTRUCTIONS, version="0.1.0", middleware=[headers_middleware]
+    )
 
     @server.tool(name="list_cases")
     def list_cases(
@@ -111,8 +149,10 @@ def build_planner(service: CaseService, actor: Actor) -> MCPServer:
 
     @server.tool(name="get_case")
     def get_case(case_id: str) -> dict[str, Any]:
-        """One case: state, path (agent or human), the engine's figures, events, proposals, and the
-        events allowed next. Prices and messages appear only for roles with cost access.
+        """One case: state, path (agent or human), the engine's figures, whether the latest engine run
+        still flags the case (``cleared`` false means it does, even after an earlier condition_cleared),
+        events (engine updates in brief), proposals, and the events allowed next. Prices and messages
+        appear only for roles with cost access.
 
         Args:
             case_id: e.g. C-US10-40000231-SH-20260925.
@@ -311,12 +351,19 @@ def main() -> None:
         case_id = os.environ.get("SNM_CASE_ID")
         if not case_id:
             raise SystemExit("SNM_CASE_ID is required for the intake profile")
+        if transport() == "http":
+            raise SystemExit("The intake profile runs over stdio only (one case per process)")
         server = build_intake(service, Actor("intake_agent", "intake", run_id, case_id))
+    elif transport() == "http":
+        roles = frozenset(
+            r.strip() for r in os.environ.get("SNM_PLANNER_ROLES", "purchasing").split(",") if r.strip()
+        )
+        server = build_planner(service, http_planner_actor(roles))
     else:
         server = build_planner(
             service, Actor("planner_agent", os.environ.get("SNM_ROLE", "purchasing"), run_id)
         )
-    server.run()
+    serve(server)
 
 
 if __name__ == "__main__":

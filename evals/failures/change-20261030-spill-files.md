@@ -52,6 +52,17 @@ Seed suite (18 cases), development model, one run per case and arm, 2026-10-30:
 - At the real ceiling no output reached 40,000 characters, so the two arms differ only by one listed tool; the one discordant case (1/0, McNemar p = 1.0) is noise.
 - At a forced 4,000-character ceiling (metric menus, table descriptions, and table lists were cut), the spill arm read back what it needed 22 times across 17 spills, so the pointer is understood and used; no answer got worse.
 - Not shown: a benefit. The cut arm lost nothing either, because on these questions the needed part sits at the head of the output. Questions whose answer lies past a cut (a late column of a wide table) are the cases that would show it.
+
+Follow-up the owner asked for (2026-10-30): the spill suite [`evals/cases/spill_v1.yaml`](../cases/spill_v1.yaml), four questions that hinge on a column documented late in a wide table's description, run at a 3,000-character ceiling for `main` against `main_nospill` (the plain cut), three repetitions ([`spill-v1-cut3k-sonnet`](../reports/spill-v1-cut3k-sonnet.md), USD 0.64):
+
+| Arm | Passed | Mean SQL statements | Mean turns | Cost per question |
+|---|---|---|---|---|
+| `main` (spill files) | 12/12 | 1.3 | 3.5 | $0.025 |
+| `main_nospill` (plain cut) | 12/12 | 2.8 | 4.4 | $0.028 |
+
+- Both arms answered every question. The plain-cut arm found the missing documentation another way: sample rows showed the values of the late column (`RF-DG01-009` told it what `prsrc` holds), and the knowledge base's time-zone page (aliases ECC system time, CPUDT) gave the clock convention; it also tried `information_schema`.
+- The spill arm read the documentation where it was cut: half the SQL statements and one turn fewer per question. The cost difference (-$0.003, interval -$0.007 to +$0.001) is not significant at this size.
+- So in this system a cut costs efficiency rather than correctness, because other tools reach the same facts; spill files keep the facts one read away. A question with no second route (a rule stated only in a comment, invisible in the data and absent from the knowledge base) would be needed to show an accuracy difference.
 - USD 3.7 for both batches.
 
 ## Decision

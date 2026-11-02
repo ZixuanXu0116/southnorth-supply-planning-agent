@@ -4,11 +4,13 @@
  *
  *   node dist/cli/verify.js --case <id> --store <dir> --planning <dir> --recommendation rec.json --json
  *
- * The recommendation file holds {case_id, options, recommended, rationale_text}. Reads SNM_ANTHROPIC_API_KEY and
- * SNM_MODEL_VERIFIER; behind a proxy, set NODE_USE_ENV_PROXY=1.
+ * The recommendation file holds {case_id, options, recommended, rationale_text}. The output adds the deterministic
+ * findings of checks.ts (a missed target or mandate field left unsaid, untraced figures). Reads
+ * SNM_ANTHROPIC_API_KEY and SNM_MODEL_VERIFIER; behind a proxy, set NODE_USE_ENV_PROXY=1.
  */
 import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
+import { factsFindings } from "../agent/checks.js";
 import { payloadOf } from "../agent/runner.js";
 import { buildPacket, caseFacts, type Ranking, type Recommendation, runVerifier } from "../agent/verifier.js";
 import { loadConfigFromEnv, readApiKey } from "../config.js";
@@ -48,7 +50,8 @@ async function main(): Promise<number> {
 		const ranking = (await read("rank_options")) as unknown as Ranking;
 		const packet = buildPacket(facts, ranking, recommendation);
 		const run = await runVerifier(packet, { model: config.models.verifier, apiKey: readApiKey() });
-		const output = { case_id: values.case, untraced_figures: packet.untraced_figures, ...run };
+		const findings = factsFindings(recommendation, ranking, facts);
+		const output = { case_id: values.case, untraced_figures: packet.untraced_figures, findings, ...run };
 		if (values.json) process.stdout.write(`${JSON.stringify(output)}\n`);
 		else console.log(JSON.stringify(output, null, 2));
 		return run.verdict ? 0 : 1;

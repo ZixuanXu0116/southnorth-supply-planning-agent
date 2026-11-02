@@ -154,6 +154,119 @@ def test_engine_sync_opens_updates_and_clears(tmp_path):
     assert svc.sync_engine_run()["opened"] == 1 and svc.view(f"{reopened}-2").state == "new"
 
 
+def test_get_case_shows_a_condition_raised_again_after_clearing(tmp_path):
+    """Regression (evals/failures/replay-20261101-C-US10-40000410-condition-history.md): the history listed
+    condition_cleared but hid the engine update that flagged the case again, so the planner read the
+    shortage as gone."""
+    planning = FakePlanning([case_row()])
+    svc = CaseService(LocalCaseStore(tmp_path / "s"), planning, clock=Clock())
+    svc.sync_engine_run("run-a")
+    planning.rows = [case_row(material="40000999", case_id="C-US10-40000999-SH-20260925")]
+    assert svc.sync_engine_run("run-b")["cleared"] == 1
+    assert svc.get_case(PURCHASING, CASE)["cleared"] is True
+    planning.rows = [case_row(gap_qty=5.0)]
+    assert svc.sync_engine_run("run-c")["updated"] == 1  # the condition is back: flagged again
+    out = svc.get_case(PLANNER, CASE)
+    assert out["cleared"] is False
+    assert [e["event_type"] for e in out["events"]] == ["case_opened", "condition_cleared", "case_updated"]
+    update = out["events"][-1]["detail"]
+    assert update == {
+        "as_of_date": "2026-09-21",
+        "condition": "shortage",
+        "trigger_date": "2026-09-26",
+        "gap_qty": 5.0,
+        "lever": "expedite",
+        "engine_version": "0.1.0",
+    }
+    # Cleared again, then flagged again with the same figures: still an update, so not cleared.
+    planning.rows = [
+        case_row(
+            material="40000999", case_id="C-US10-40000999-SH-20260925", as_of_date=AS_OF + timedelta(days=1)
+        )
+    ]
+    assert svc.sync_engine_run("run-d")["cleared"] == 1
+    planning.rows = [case_row(gap_qty=5.0)]
+    assert svc.sync_engine_run("run-e")["updated"] == 1
+    assert svc.get_case(PLANNER, CASE)["cleared"] is False
+    assert svc.sync_engine_run("run-f")["unchanged"] == 1  # flagged and unchanged: no new event
+
+
+def test_engine_levers_are_dated_from_today(tmp_path):
+    """Regression (evals/failures/replay-20261101-C-US10-40000410-lever-timing.md): the engine dates its
+    levers as if ordered on the snapshot's as-of date; acted on later, a lever arrives later, so a reference
+    row never shows an arrival that is already past."""
+    clock = Clock()
+    svc = CaseService(LocalCaseStore(tmp_path / "s"), FakePlanning([case_row()]), clock=clock)
+    svc.sync_engine_run("plan-1")
+    planned = svc.evaluate_option(PURCHASING, CASE, "new_order")
+    assert str(planned["coverage_date"]) == "2026-11-09"
+    assert not any("ordered today" in note for note in planned["notes"])
+    clock.now += timedelta(days=5)
+    later = svc.evaluate_option(PURCHASING, CASE, "new_order")
+    assert str(later["coverage_date"]) == "2026-11-14"
+    assert any("ordered today, 5 days later, it arrives 2026-11-14" in note for note in later["notes"])
+    assert later["evaluation_id"] != planned["evaluation_id"]
+    assert str(svc.evaluate_option(PURCHASING, CASE, "expedite")["coverage_date"]) == "2026-09-29"
+    clock.now += timedelta(days=15)
+    # Never after the open order's own date (2026-10-05): expediting then gains nothing.
+    assert str(svc.evaluate_option(PURCHASING, CASE, "expedite")["coverage_date"]) == "2026-10-05"
+
+
+def test_mandate_default_judges_the_lever_on_todays_arrival(tmp_path):
+    row = case_row(
+        lever="new_order",
+        lever_qty=10.0,
+        lever_detail=json.dumps({"lead_days": 10}),
+        coverage_date=date(2026, 10, 1),
+        trigger_date=date(2026, 10, 10),
+        alternatives=json.dumps([]),
+        alternative_costs_usd=json.dumps({"new_order": 75.0}),
+    )
+    clock = Clock()
+    svc = CaseService(LocalCaseStore(tmp_path / "s"), FakePlanning([row]), clock=clock)
+    svc.sync_engine_run("plan-1")
+    assert "arrives 2026-10-01, by the trigger date" in svc.mandate_defaults(PURCHASING, CASE)["basis"]
+    clock.now += timedelta(days=15)  # ordered today it arrives 2026-10-16, after the trigger date
+    assert svc.mandate_defaults(PURCHASING, CASE)["basis"].startswith("Nothing arrives by 2026-10-10")
+
+
+def test_case_server_clock_can_be_pinned_to_a_world_day(monkeypatch):
+    from snm_cases.service import _now
+
+    monkeypatch.setenv("SNM_CASE_TODAY", "2026-09-21")
+    assert _now().date() == date(2026, 9, 21)
+    monkeypatch.delenv("SNM_CASE_TODAY")
+    assert _now().date() != date(2026, 9, 21) or datetime.now(UTC).date() == date(2026, 9, 21)
+
+
+def test_once_the_supplier_has_quoted_the_choices_are_its_quotes_or_doing_nothing(service):
+    """The owner, 2026-11-02: the engine's levers are estimates, not offers; once there is a quote, a
+    decision (and a recommendation) chooses a quote or no action. The estimates stay as reference rows."""
+    assert service.decision_choices(CASE) == ["expedite", "new_order", "no_action"]  # no quote yet
+    service.draft_supplier_request(PLANNER, CASE, "expedite", REQUEST)
+    service.append(PURCHASING, CASE, "request_sent", {"channel": "portal", "handled_by": "intake_agent"})
+    service.record_proposal(
+        INTAKE, CASE, [{"option_id": 1, "kind": "expedite", "quantity": 20, "arrival_date": "2026-09-25"}]
+    )
+    [offer] = [p.proposal_id for p in service.store.proposals(CASE)]
+    assert service.decision_choices(CASE) == [offer, "no_action"]
+    ranking = service.rank_options(PURCHASING, CASE)
+    assert [r["option"] for r in ranking["reference"]] == ["expedite", "new_order", "no_action"]
+    ranked = [
+        {"option": r["option"], "evaluation_id": r["evaluation_id"], "rank": r["rank"]}
+        for r in ranking["ranked"]
+    ]
+    with pytest.raises(CaseError) as error:
+        service.propose_recommendation(
+            PLANNER, CASE, ranked, "new_order", "The engine's estimate is cheaper."
+        )
+    assert error.value.code == "NOT_A_CHOICE" and offer in str(error.value)
+    service.propose_recommendation(PLANNER, CASE, ranked, offer, "The supplier's expedite covers the gap.")
+    with pytest.raises(CaseError) as error:
+        service.decide(PURCHASING, CASE, "new_order", "cheaper")
+    assert error.value.code == "UNKNOWN_OPTION"
+
+
 def test_full_agent_flow_to_closed_case(service):
     service.draft_supplier_request(PLANNER, CASE, "expedite", REQUEST)
     with pytest.raises(CaseError) as error:
@@ -631,6 +744,15 @@ def test_proposals_are_ranked_by_the_purchasing_rule(service):
     )
     assert recorded.payload["ranking_rule"] == "mandate_first"
     assert recorded.payload["server_ranking"] == [p1, p2, p3]
+    # Without a qualified demand model the risk is not priced, and the facts line says so.
+    facts = recorded.payload["facts_line"]
+    assert (
+        facts.startswith(f"Recommended {p1.split('-C-')[0]}: arrives ")
+        and "stock-out risk not priced" in facts
+    )
+    assert "mandate: inside" in facts and facts.endswith(" vs. the standard price).")
+    assert "not a supplier offer" in service.facts_line(PURCHASING, CASE, "no_action")
+    assert "kind and validity missed" in service.facts_line(PURCHASING, CASE, p3)
 
 
 # Demand of 14 a week, every week, is the fixture's firm demand of 2 a day: every simulated path is the
@@ -670,6 +792,18 @@ def test_a_c_parts_late_offer_competes_on_expected_cost(tmp_path, criticality):
     late_cost = 200.0 if criticality == "C" else 1000.0
     assert rows[p2]["expected_total_cost"] == pytest.approx(late_cost)
     assert rows[p2]["missed"] == ["arrival"] and rows[p2]["stockout_risk"] == "100.00%"
+    # Every row carries the expected total cost, the reference rows included (verifier-form-v1), and so does
+    # evaluate_option; doing nothing's expected total is its cost with the expected line-down.
+    for row in ranking["reference"]:
+        assert row["expected_total_cost"] is not None
+    nothing = svc.evaluate_option(PURCHASING, CASE, "no_action")
+    reference = {row["option"]: row for row in ranking["reference"]}
+    assert nothing["expected_total_cost"] == reference["no_action"]["expected_total_cost"]
+    assert nothing["expected_total_cost"] == pytest.approx(
+        nothing["total_cost"] - nothing["stockout_cost"] + nothing["expected_line_down_cost"], abs=0.01
+    )
+    masked = svc.rank_options(Actor("human", "site_manager_rr"), CASE)
+    assert all(row["expected_total_cost"] is None for row in masked["ranked"] + masked["reference"])
     order = [row["option"] for row in ranking["ranked"]]
     if criticality == "C":
         assert order == [p2, p1] and rows[p2]["late_priced_by_risk"]
@@ -677,6 +811,26 @@ def test_a_c_parts_late_offer_competes_on_expected_cost(tmp_path, criticality):
     else:
         assert order == [p1, p2] and not rows[p2]["late_priced_by_risk"]
         assert svc.recommended_proposal(CASE) == p1
+    # The facts line the case page shows above the planner's text, written from the evaluation (change card
+    # change-20261030-planner-recommendation-facts): the missed target and mandate field cannot be left out.
+    short = p2.split("-C-")[0]
+    # Two numbers: what purchasing would pay (the goods at the offered price, here the reference price as
+    # P-2 quotes none, plus every cost), and the expected total cost against the reference price.
+    evaluated = svc.evaluate_option(PURCHASING, CASE, p2)
+    spend = evaluated["expected_spend"]
+    assert spend == pytest.approx(
+        evaluated["purchase_value"] + evaluated["expected_total_cost"] - evaluated["price_difference_cost"],
+        abs=0.01,
+    )
+    assert evaluated["purchase_value"] == pytest.approx(20 * 5000 / 9, abs=0.01) and spend > late_cost
+    assert svc.facts_line(PURCHASING, CASE, p2) == (
+        f"Recommended {short}: arrives 2026-09-27; stock-out risk 100.00% (target at most 10%: missed); "
+        f"mandate: arrival missed{' (priced by risk)' if criticality == 'C' else ''}; "
+        f"expected spend {spend:,.2f} USD ({late_cost:,.2f} vs. the standard price)."
+    )
+    masked = svc.facts_line(Actor("human", "site_manager_rr"), CASE, p2)
+    assert "expected spend" not in masked and "standard price" not in masked
+    assert svc.evaluate_option(Actor("human", "site_manager_rr"), CASE, p2)["expected_spend"] is None
 
 
 def test_mandate_is_set_by_purchasing_and_masked_for_logistics(service):

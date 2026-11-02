@@ -3,6 +3,7 @@ import { createModels } from "@earendil-works/pi-ai";
 import { describe, expect, it } from "vitest";
 import { getModel } from "@earendil-works/pi-ai/compat";
 import { ConfigError, DEFAULT_BUDGETS, loadConfigFromEnv, readApiKey, resolveModel } from "../src/index.js";
+import { plannerModelFor } from "../src/config.js";
 import { localModels } from "../src/models.js";
 
 const baseEnv = {
@@ -62,7 +63,19 @@ describe("resolveModel", () => {
 		expect(model.name).toBe("Claude Sonnet 5.5");
 		expect(model.api).toBe(base.api);
 		expect(model.compat).toEqual(base.compat);
-		expect(model.cost).toEqual({ input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 });
+		// Pricing page, checked 2026-11-02: cache hits on Sonnet 5.5 are 0.05x the base input price.
+		expect(model.cost).toEqual({ input: 2, output: 10, cacheRead: 0.1, cacheWrite: 2.5 });
+		const haiku = resolveModel({ provider: "anthropic", modelId: "claude-haiku-5-5", effort: "low" });
+		expect(haiku.cost).toEqual({ input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite: 0.125 });
+		expect(haiku.contextWindow).toBe(1000000);
+	});
+
+	it("gives a planner task its own effort when one is set", () => {
+		const main = { provider: "anthropic", modelId: "claude-sonnet-5-5", effort: "medium" } as const;
+		const env = { SNM_EFFORT_MAIN_EVALUATE: "high" };
+		expect(plannerModelFor(main, "evaluate", env)).toEqual({ ...main, effort: "high" });
+		expect(plannerModelFor(main, "prepare", env)).toEqual(main);
+		expect(() => plannerModelFor(main, "evaluate", { SNM_EFFORT_MAIN_EVALUATE: "huge" })).toThrow(/effort level/);
 	});
 
 	it("keeps local entries only while the PI catalog lacks them", () => {
