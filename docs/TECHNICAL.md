@@ -181,7 +181,7 @@ Built: the case server's intake profile, bound to one case: `get_request`, `reco
 - Question banks with a development split and a locked test split; reference answers bound to the data snapshot; deterministic scoring (behavior routing, value matching with tolerances, leak checks); paired arm comparisons with McNemar tests and bootstrap intervals.
 - Planner suites with deterministic checks (one event, the right action, the rule's ranking).
 - The engine replayed against history and priced against a hindsight oracle (regret per case).
-- Prompt changes start from a failure card and are measured paired against the current version before adoption. Every batch is logged to MLflow with one trace per agent run; the app's agent runs go to their own experiment the same way, one trace per run, uploaded in the background (`apps/web/src/snm_web/tracing.py`). Reports: [`../evals/reports/`](../evals/reports/).
+- Prompt changes start from a failure card and are measured paired against the current version before adoption. Every batch is logged to MLflow with one trace per agent run: the data agent's to `snm-agent-evals`, the workflow's (planner, extractor) to `/Shared/snm-workflow/evals` (`snm-evals mlflow-upload-workflow`); the app's agent runs go to `/Shared/snm-workflow/app` the same way, one trace per run, uploaded in the background (`apps/web/src/snm_web/tracing.py`). Every workflow trace carries the tags `agent`, `task`, `case_id`, `status`, `source` (`eval` or `app`), `batch`, `prompt_version`, and `model`; where each kind of trace is: [`DEPLOYMENT.md`](DEPLOYMENT.md#where-the-traces-are). Reports: [`../evals/reports/`](../evals/reports/).
 
 ## 11. Status
 

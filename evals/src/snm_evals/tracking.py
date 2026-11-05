@@ -72,6 +72,8 @@ _END_KEYS = (
     "status", "usage", "turns", "repairs", "requests", "sql_statements", "wall_clock_s", "tool_calls",
     "tool_errors", "faithfulness", "rejected_submissions", "task_card", "task_card_updates", "error",
 )  # fmt: skip
+# What a workflow run wrote: the planner's write and refusals, the extractor's draft, the failure note.
+_WRITE_KEYS = ("written", "refused_writes", "extraction", "failure_note")
 _REQUEST_KEYS = ("model", "max_tokens", "thinking", "effort", "effort_source", "betas", "messages", "tools")
 
 
@@ -90,7 +92,9 @@ def trace_spans(events: list[dict[str, Any]]) -> list[SpanSpec]:
         start_ns=timestamp_ns(start["ts"]),
         end_ns=timestamp_ns((end or events[-1])["ts"]),
         inputs=_pick(start, ("question", "case_id", "task", "role", "as_of")),
-        outputs={"status": end.get("status"), "answer": end.get("answer")} if end else None,
+        outputs={"status": end.get("status"), "answer": end.get("answer"), **_pick(end, _WRITE_KEYS)}
+        if end
+        else None,
         attributes=_pick(start, (*_START_KEYS, "manifest")),
         error=end is None or end.get("status") == "error",
     )
@@ -134,6 +138,10 @@ def trace_spans(events: list[dict[str, Any]]) -> list[SpanSpec]:
             request = None
         elif kind == "tool":
             duration_ns = int(event.get("duration_ms") or 0) * 1_000_000
+            # The extractor's tool events carry no call id: match the latest call of the same tool.
+            call = calls.get(event.get("id", "")) or next(
+                (c for c in reversed(list(calls.values())) if c.get("name") == event["name"]), {}
+            )
             spans.append(
                 SpanSpec(
                     key=f"tool-{event.get('seq')}",
@@ -142,9 +150,12 @@ def trace_spans(events: list[dict[str, Any]]) -> list[SpanSpec]:
                     start_ns=at - duration_ns,
                     end_ns=at,
                     parent="run",
-                    inputs=(calls.get(event["id"]) or {}).get("arguments"),
+                    inputs=call.get("arguments"),
                     outputs=event.get("output"),
-                    attributes={"tool_call_id": event["id"], "duration_ms": event.get("duration_ms")},
+                    attributes={
+                        "tool_call_id": event.get("id") or call.get("id"),
+                        "duration_ms": event.get("duration_ms"),
+                    },
                     error=bool(event.get("is_error")),
                 )
             )
@@ -316,10 +327,20 @@ def _log_trace(
 
 
 def ensure_experiment(client: Any, experiment: str, artifact_location: str | None = None) -> str:
-    """The experiment's id, created (with ``artifact_location`` when given) when it does not exist yet."""
+    """The experiment's id, created (with ``artifact_location`` when given) when it does not exist yet.
+
+    On Databricks, an experiment's workspace folder must exist before the experiment can be created there.
+    """
     found = client.get_experiment_by_name(experiment)
     if found:
         return found.experiment_id
+    import mlflow
+
+    folder = experiment.rstrip("/").rsplit("/", 1)[0]
+    if folder and experiment.startswith("/") and str(mlflow.get_tracking_uri()).startswith("databricks"):
+        from databricks.sdk import WorkspaceClient
+
+        WorkspaceClient().workspace.mkdirs(folder)
     return client.create_experiment(experiment, artifact_location=artifact_location)
 
 

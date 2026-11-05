@@ -98,6 +98,8 @@ uv run snm-evals run ... --repeat 3                             # repetitions fo
 uv run snm-evals run ... --retry-errors --batch <batch>         # rerun the errored runs of a batch
 uv run snm-evals score <batch>                                  # rescore after a scorer fix
 uv run snm-evals mlflow-upload <batch>                          # when the upload at the end of a run failed
+uv run snm-evals mlflow-upload-workflow <batch> | --all         # planner and extractor batches (idempotent)
+uv run snm-evals mlflow-upload-workflow --all --count           # local trace files against MLflow, per batch
 uv run snm-data replay && uv run snm-data oracle                # engine gates (offline, on out/small)
 uv run snm-evals planner --planning out/planning/<as-of> --report --batch planner-prepare-<tag>
 ```

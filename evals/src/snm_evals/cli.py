@@ -64,6 +64,18 @@ def main(argv: list[str] | None = None) -> None:
     upload.add_argument(
         "--experiment", help="MLflow experiment path (default: SNM_MLFLOW_EXPERIMENT, else ~/snm-agent-evals)"
     )
+    workflow = commands.add_parser(
+        "mlflow-upload-workflow",
+        help="log workflow batches (planner, extractor) to /Shared/snm-workflow/evals, with their traces",
+    )
+    workflow.add_argument("batch", nargs="*", help="batch directory names under runs/evals/")
+    workflow.add_argument("--all", action="store_true", help="every workflow batch under runs/evals/")
+    workflow.add_argument("--replace", action="store_true", help="upload again batches already in MLflow")
+    workflow.add_argument("--count", action="store_true", help="only compare local and MLflow trace counts")
+    commands.add_parser(
+        "mlflow-upload-app-runs",
+        help="log the app's earlier agent runs from the runs volume to /Shared/snm-workflow/app (once)",
+    )
     planner = commands.add_parser(
         "planner", help="evaluate the planner agent's prepare task on a local engine run"
     )
@@ -287,11 +299,53 @@ def main(argv: list[str] | None = None) -> None:
             except Exception as error:
                 retry = f"snm-evals mlflow-upload --replace {batch_dir.name}"
                 raise SystemExit(f"MLflow upload failed ({error}); retry with `{retry}`") from error
+    elif args.command == "mlflow-upload-workflow":
+        _upload_workflow(args)
+    elif args.command == "mlflow-upload-app-runs":
+        from snm_data.databricks import workspace_client
+
+        from .workflow_mlflow import upload_app_runs
+
+        configure_tracking()
+        added = upload_app_runs(workspace_client(DatabricksSettings.from_env()).files)
+        print(f"{len(added)} app runs added to MLflow")
     elif args.command == "mlflow-upload":
         configure_tracking()
         experiment = args.experiment or default_experiment()
         for name in args.batch:
             upload_batch(RUNS_ROOT / name, experiment, replace=args.replace)
+
+
+def workflow_batches() -> list[Path]:
+    """The workflow's evaluation batches: those without the data agent's scores (``scores.json``)."""
+    return sorted(
+        path for path in RUNS_ROOT.iterdir() if path.is_dir() and not (path / "scores.json").is_file()
+    )
+
+
+def _upload_workflow(args: argparse.Namespace) -> None:
+    from .workflow_mlflow import count_workflow_batch, upload_workflow_batch
+
+    configure_tracking()
+    batches = workflow_batches() if args.all else [RUNS_ROOT / name for name in args.batch]
+    if not batches:
+        raise SystemExit("name the batches, or pass --all")
+    scored = [batch.name for batch in batches if (batch / "scores.json").is_file()]
+    if scored:
+        raise SystemExit(f"data agent batches, uploaded with `snm-evals mlflow-upload`: {', '.join(scored)}")
+    if args.count:
+        mismatched = 0
+        for batch in batches:
+            local, logged, complete = count_workflow_batch(batch)
+            mismatched += local != logged or not complete
+            state = "complete" if complete else "not uploaded"
+            print(f"{batch.name}: {local} local traces, {logged} in MLflow ({state})")
+        if mismatched:
+            raise SystemExit(f"{mismatched} batch(es) differ")
+        return
+    # The smallest batches first: a limit on traces would show before the largest batch is half done.
+    for batch in sorted(batches, key=lambda path: len(list(path.rglob("trace.jsonl")))):
+        upload_workflow_batch(batch, replace=args.replace)
 
 
 def _improve(args: argparse.Namespace) -> None:

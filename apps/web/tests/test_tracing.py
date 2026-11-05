@@ -20,7 +20,8 @@ def test_runs_are_queued_with_their_tags_and_a_failed_upload_is_only_recorded(tm
             raise RuntimeError("PERMISSION_DENIED")
         uploaded.append((path.name, experiment, tags))
 
-    tracer = RunTracer("/Shared/snm-app-traces", "lakehouse", lambda **entry: records.append(entry), log)
+    record = lambda **entry: records.append(entry)  # noqa: E731
+    tracer = RunTracer("/Shared/snm-workflow/app", "lakehouse", record, log, batch="app-20261102T100000Z")
     tracer.start(tmp_path)
     trace = tmp_path / "agents" / "r1" / "trace.jsonl"
     trace.parent.mkdir(parents=True)
@@ -48,10 +49,13 @@ def test_runs_are_queued_with_their_tags_and_a_failed_upload_is_only_recorded(tm
     kinds = [tags["snm.kind"] for _, _, tags in uploaded]
     assert kinds == ["app_start", "planner", "extractor"]
     assert all(
-        experiment == "/Shared/snm-app-traces" and tags["snm.source"] == "lakehouse"
+        experiment == "/Shared/snm-workflow/app"
+        and tags["snm.source"] == "lakehouse"
+        and tags["source"] == "app"
         for _, experiment, tags in uploaded
     )
-    expected = {"snm.source": "lakehouse", "snm.kind": "planner", "run_id": "r1", "case_id": "C-1",
+    expected = {"snm.source": "lakehouse", "source": "app", "batch": "app-20261102T100000Z",
+                "app_start": "20261102T100000Z", "snm.kind": "planner", "run_id": "r1", "case_id": "C-1",
                 "task": "evaluate", "status": "written"}  # fmt: skip
     assert uploaded[1][2] == expected
     assert [r["outcome"] for r in records] == ["ok", "ok", "error", "ok"]
@@ -60,7 +64,7 @@ def test_runs_are_queued_with_their_tags_and_a_failed_upload_is_only_recorded(tm
 
 def test_tracing_is_on_in_the_app_and_off_locally_unless_asked(monkeypatch):
     monkeypatch.delenv("SNM_MLFLOW_APP_EXPERIMENT", raising=False)
-    assert app_experiment(default_on=True) == "/Shared/snm-app-traces"
+    assert app_experiment(default_on=True) == "/Shared/snm-workflow/app"
     assert app_experiment(default_on=False) is None
     monkeypatch.setenv("SNM_MLFLOW_APP_EXPERIMENT", "off")
     assert app_experiment(default_on=True) is None

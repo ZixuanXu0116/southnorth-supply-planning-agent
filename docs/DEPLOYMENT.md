@@ -107,6 +107,16 @@ The case server's day: engine levers are dated from today (the snapshot's as-of 
 
 Supplier documents (2026-11-02): a supplier's own PDF, screenshot, or Excel is read by the extractor (`harness/dist/cli/extract.js`, the model `SNM_MODEL_EXTRACTOR`, appended to `app.yaml` by `deploy.py` like the other model settings) into a draft that purchasing confirms on the case page; PDFs are rendered with `pypdfium2` (a wheel, no system package).
 
-MLflow (2026-11-02): each agent run of the app (planner, extractor) is uploaded as one MLflow trace, rebuilt from its `trace.jsonl` as evaluation runs are, to the experiment `SNM_MLFLOW_APP_EXPERIMENT` (default `/Shared/snm-app-traces`, apart from the evaluation experiment), in a background thread; the experiment keeps its trace data in the runs volume (`dbfs:/Volumes/snm/cases/runs/mlflow-traces`, `SNM_MLFLOW_APP_ARTIFACTS`), written through the workspace's Files API, because an app's outbound connection to the storage host of MLflow's default trace store is refused (found on the first deployment, 2026-11-02); at start the app writes one `app_start` trace, which shows that its principal can write there. Every upload and every failure is a line in the access log (`action` `mlflow_trace`). Local pages do the same with `snm-web serve --mlflow`.
+MLflow (2026-11-02): each agent run of the app (planner, extractor) is uploaded as one MLflow trace, rebuilt from its `trace.jsonl` as evaluation runs are, to the experiment `SNM_MLFLOW_APP_EXPERIMENT` (default `/Shared/snm-workflow/app`, since 2026-11-05; before, `/Shared/snm-app-traces`), in a background thread, tagged with the app start (`batch` = `app-<UTC time>`, the runs mirror's folder); the experiment keeps its trace data in the runs volume (`dbfs:/Volumes/snm/cases/runs/mlflow-traces/workflow-app`, `SNM_MLFLOW_APP_ARTIFACTS`), written through the workspace's Files API, because an app's outbound connection to the storage host of MLflow's default trace store is refused (found on the first deployment, 2026-11-02); at start the app writes one `app_start` trace, which shows that its principal can write there. Every upload and every failure is a line in the access log (`action` `mlflow_trace`). Local pages do the same with `snm-web serve --mlflow`. The app's runs from before 2026-11-05 were uploaded once from the volume with `snm-evals mlflow-upload-app-runs`, each tagged with the first app start whose folder holds it.
+
+### Where the traces are
+
+| Runs | MLflow experiment | Raw files |
+|---|---|---|
+| Data agent evaluation batches | `snm-agent-evals` in the uploading user's folder | `runs/evals/<batch>/` where the batch ran |
+| Workflow evaluation batches (planner, extractor) | `/Shared/snm-workflow/evals`: one run per batch, one trace per agent run | `runs/evals/<batch>/` where the batch ran; a copy of the batches of 2026-11-05 in `/Volumes/snm/cases/runs/eval-backup-20261105/` |
+| App agent runs | `/Shared/snm-workflow/app`: one trace per agent run | `/Volumes/snm/cases/runs/app-<start>/agents/<run>/` |
+
+Both workflow experiments keep their trace data under `/Volumes/snm/cases/runs/mlflow-traces/`. Filter a workflow experiment's traces by `agent`, `task`, `case_id`, `status`, `source`, `batch`, `prompt_version`, or `model`.
 
 Not yet in the app: the question page and the data agent (its tool server needs a role's service principal of its own).

@@ -3,12 +3,15 @@
 After each agent run of the pages (the planner, the supplier-document extractor), its ``trace.jsonl`` is
 rebuilt into one MLflow trace exactly as an evaluation batch's runs are (``snm_evals.tracking``), in a
 background thread so that no page waits on MLflow. App runs go to their own experiment,
-``SNM_MLFLOW_APP_EXPERIMENT`` (default ``/Shared/snm-app-traces``; ``off`` turns it off), never to the
-evaluation experiment, which holds evaluation results. The experiment keeps its trace data in the runs
-volume (``SNM_MLFLOW_APP_ARTIFACTS``), written through the workspace's Files API: a Databricks App cannot
-reach the storage host that MLflow's default trace store uploads to (connection refused, 2026-11-02). When
-the pages start, one ``app_start`` trace checks that this identity can write there. Every upload, and every
-failure to upload, is a line in the access log; a failure never fails the run.
+``SNM_MLFLOW_APP_EXPERIMENT`` (default ``/Shared/snm-workflow/app``, next to the workflow's evaluation
+batches since 2026-11-05; ``off`` turns it off), never to an evaluation experiment, which holds evaluation
+results.
+Each trace carries the workflow's filter tags (``snm_evals.workflow_mlflow.workflow_tags``) with ``source`` =
+``app`` and ``batch`` = the app start (``app-<UTC time>``, the runs mirror's folder). The experiment keeps its
+trace data in the runs volume (``SNM_MLFLOW_APP_ARTIFACTS``), written through the workspace's Files API: a
+Databricks App cannot reach the storage host that MLflow's default trace store uploads to (connection
+refused, 2026-11-02). When the pages start, one ``app_start`` trace checks that this identity can write
+there. Every upload, and every failure to upload, is a line in the access log; a failure never fails the run.
 """
 
 from __future__ import annotations
@@ -23,9 +26,9 @@ from pathlib import Path
 from typing import Any
 
 APP_EXPERIMENT_ENV = "SNM_MLFLOW_APP_EXPERIMENT"
-DEFAULT_APP_EXPERIMENT = "/Shared/snm-app-traces"
+DEFAULT_APP_EXPERIMENT = "/Shared/snm-workflow/app"
 APP_ARTIFACTS_ENV = "SNM_MLFLOW_APP_ARTIFACTS"
-DEFAULT_APP_ARTIFACTS = "dbfs:/Volumes/snm/cases/runs/mlflow-traces"
+DEFAULT_APP_ARTIFACTS = "dbfs:/Volumes/snm/cases/runs/mlflow-traces/workflow-app"
 
 Record = Callable[..., None]  # Audit.write
 LogRun = Callable[[Path, str, dict[str, str]], Any]  # snm_evals.tracking.log_run
@@ -38,18 +41,28 @@ def app_experiment(default_on: bool) -> str | None:
 
 
 def _log_run(path: Path, experiment: str, tags: dict[str, str]) -> Any:
-    from snm_evals.tracking import configure_tracking, log_run
+    from snm_evals.tracking import configure_tracking, log_run, read_events
+    from snm_evals.workflow_mlflow import workflow_tags
 
     configure_tracking()
     artifacts = os.environ.get(APP_ARTIFACTS_ENV, DEFAULT_APP_ARTIFACTS).strip() or None
+    tags = {**workflow_tags(read_events(path), "app", tags.get("batch", "-")), **tags}
     return log_run(path, experiment, tags, artifacts)
+
+
+def app_start_label(now: datetime | None = None) -> str:
+    """The name of one app start: the runs mirror's folder and the ``batch`` tag of its traces."""
+    return (now or datetime.now(UTC)).strftime("app-%Y%m%dT%H%M%SZ")
 
 
 class RunTracer:
     """Uploads agent runs to MLflow one at a time, in the background."""
 
-    def __init__(self, experiment: str, source: str, record: Record, log: LogRun = _log_run) -> None:
+    def __init__(
+        self, experiment: str, source: str, record: Record, log: LogRun = _log_run, batch: str = ""
+    ) -> None:
         self.experiment, self.source, self.record, self.log = experiment, source, record, log
+        self.batch = batch or app_start_label()
         self._queue: queue.Queue[tuple[Path, dict[str, str]] | None] = queue.Queue()
         self._thread = threading.Thread(target=self._work, name="mlflow-traces", daemon=True)
 
@@ -69,7 +82,8 @@ class RunTracer:
         return self
 
     def submit(self, trace_path: Path, tags: dict[str, str]) -> None:
-        self._queue.put((trace_path, {"snm.source": self.source, **tags}))
+        start = {"batch": self.batch, "app_start": self.batch.removeprefix("app-")}
+        self._queue.put((trace_path, {"snm.source": self.source, "source": "app", **start, **tags}))
 
     def drain(self) -> None:
         """Wait until every queued run is uploaded (tests, shutdown)."""
