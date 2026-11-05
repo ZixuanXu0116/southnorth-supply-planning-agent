@@ -37,7 +37,7 @@ The project has three goals:
 | D7 | Sites: Round Rock (US10, satellites as storage locations, LTS RFID); Longgang hub (CN10, AutoStore); Dongguan spoke (storage location of CN10) | See `DATA_MODEL.md` §1. |
 | D8 | 52/53-week fiscal year ending on the last Sunday of October | Realistic period logic and a deliberate trap. |
 | D9 | People-analytics and export-control policies (§7.2) | Real-world constraints that make guardrails meaningful. |
-| D10 | English for all repository artifacts, data, UI, and user questions | Target audience and job market. |
+| D10 | English for data, UI, and user questions | The intended users. |
 
 ---
 
