@@ -29,7 +29,7 @@ function propose(rationale: string) {
 	);
 }
 
-describe("planner loop: the rationale's figures and the retry cap (the owner, 2026-11-02)", () => {
+describe("planner loop: the rationale's figures and the retry cap (decided 2026-11-02)", () => {
 	let faux: FauxProviderRegistration;
 	const dir = mkdtempSync(join(tmpdir(), "snm-planner-loop-"));
 	beforeAll(() => {

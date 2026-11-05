@@ -133,7 +133,7 @@ export interface PlannerRunOptions {
 	promptVersion?: PlannerPromptVersion;
 	/**
 	 * Check the figures of a recommendation's rationale against the case server's evaluations before it is written:
-	 * a number or date found in no evaluation refuses the write (the owner, 2026-11-02: on by default).
+	 * a number or date found in no evaluation refuses the write (decided 2026-11-02: on by default).
 	 */
 	figureCheck?: boolean;
 	/** Verify a recommendation before it is written (docs/TECHNICAL.md §7); off unless given. */

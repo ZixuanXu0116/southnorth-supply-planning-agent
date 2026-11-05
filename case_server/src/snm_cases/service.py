@@ -136,7 +136,7 @@ SUPPLIER_OPEN_STATES = frozenset({"sent", "responded", "recommended"})  # a supp
 MANDATE_VALIDITY_DAYS = 3  # days purchasing needs to decide on an in-mandate proposal (record 004)
 MANDATE_MAX_EXCHANGES = 6  # exchanges with a supplier before the intake agent escalates (PROPOSAL §5.5)
 EXPEDITE_LEVERS = ("expedite", "expedited_new_order")  # levers that buy speed with surcharge and freight
-# How proposals are ranked for purchasing (decision record 007, the owner, 2026-10-20): where the case's
+# How proposals are ranked for purchasing (decision record 007, 2026-10-20): where the case's
 # demand model prices the stock-out risk, by expected total cost (the option's cost plus its expected
 # line-down), with the proposals inside the mandate and, for C parts, those that miss only the arrival date
 # competing on it, then the others by the number of mandate fields missed and expected total cost. Without a
@@ -713,7 +713,7 @@ class CaseService:
         return [*[lever for lever in levers if lever], "no_action"]
 
     def decision_choices(self, case_id: str) -> list[str]:
-        """What a decision can choose. Once the supplier has quoted, its quotes or doing nothing (the owner,
+        """What a decision can choose. Once the supplier has quoted, its quotes or doing nothing (decided
         2026-11-02): the engine's levers are estimates, not offers, and getting one takes another exchange
         with the supplier. Before any quote (or when every answer is a decline), the engine's own levers."""
         view = self.view(case_id)
@@ -735,19 +735,29 @@ class CaseService:
                 f"Say in one line why you choose {choice}"
                 + (f" over the recommended {recommended}." if recommended else " (nothing is recommended)."),
             )
-        events = [
-            self.append(actor, case_id, "decision_recorded", {"choice": choice, "rationale_text": rationale})
-        ]
+        payload: dict[str, Any] = {"choice": choice, "rationale_text": rationale}
+        if recommended:
+            payload |= {"recommended": recommended, "followed_recommendation": choice == recommended}
+        events = [self.append(actor, case_id, "decision_recorded", payload)]
         if choice != "no_action":
             events.append(self.hand_off(run_id, case_id))
         return events
 
     def recommended_choice(self, case_id: str) -> str | None:
-        """What a decision without a reason may choose (the owner, 2026-10-20): the recommended proposal once
-        proposals exist (None when none is recommended), else the engine's lever."""
+        """What a decision without a reason may choose (decided 2026-10-20; 2026-11-05: the planner's
+        recommendation counts): the planner's recommended option while no proposal arrived after it, else the
+        server's recommended proposal once proposals exist (None when none is recommended), else the engine's
+        lever. Any other choice needs a one-line reason, which is kept as feedback on the recommendation."""
+        view = self.view(case_id)
+        proposed = next((e for e in reversed(view.events) if e.event_type == "recommendation_proposed"), None)
+        if proposed is not None:
+            stale = any(e.event_type == "proposal_recorded" and e.seq > proposed.seq for e in view.events)
+            choice = str(proposed.payload.get("recommended") or "")
+            if not stale and choice in self.decision_choices(case_id):
+                return choice
         if any(p.kind != "decline" for p in self.store.proposals(case_id)):
             return self.recommended_proposal(case_id)
-        return str(self.view(case_id).snapshot.get("lever") or "") or None
+        return str(view.snapshot.get("lever") or "") or None
 
     def _ranking(self, view: CaseView) -> tuple[str, list[tuple[Evaluation, list[str], bool]]]:
         """The rule in force for the case and its proposals in that rule's order: (evaluation, mandate fields

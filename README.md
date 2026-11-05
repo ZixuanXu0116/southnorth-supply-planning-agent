@@ -86,4 +86,4 @@ The agents also need Node 22 (`npm ci && npm run build -w harness`) and an Anthr
 
 I designed the core ideas, the system architecture, and the whole pipeline and workflow; Claude Code wrote the code.
 
-More: [technical notes](docs/TECHNICAL.md) · [status log](docs/STATUS.md) · [design](docs/PROPOSAL.md) · [developer guide](docs/DEVELOPMENT.md) · [role play](docs/ROLE_PLAY.md)
+More: [technical notes](docs/TECHNICAL.md) · [design](docs/PROPOSAL.md) · [developer guide](docs/DEVELOPMENT.md) · [role play](docs/ROLE_PLAY.md)

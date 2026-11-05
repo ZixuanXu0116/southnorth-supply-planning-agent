@@ -67,7 +67,7 @@ Option 3 with the answers above (the owner, 2026-10-31). The loop proposes, guar
 - Gate G0: `uv run pytest` and `npm test -w harness` green, with tests for the collection rules, the trace excerpt, every guard (a planted reference value, case id, question span, disallowed path, and oversized edit each fail; a clean rule passes), the case selection, the control-reuse rule, the advisory verdict, the `improver` CLI on the faux provider (a proposal that fails a guard gets one repair), and `SNM_KB_ROOT` reaching the knowledge-base tools, the INDEX in the prompt, and the manifest digest. The planner's tests unchanged.
 - Replay of c109 as of its batch's commit (the knowledge base without the 2026-10-19 rule): collect, propose, guard, and screen run from one command; the proposal edits the knowledge base and passes the guards; the screen shows c109 passing at least 2 of 3 with no regression among the screen cases; under USD 3 in all. The owner reads the packet and says whether they would have adopted it.
 - Replay of c184 as of its batch's commit (the reference that still named generator 0.7's suppliers): the proposer returns `reference` with no edit, and no screen is spent (about USD 0.30).
-- The acceptance runs cost about USD 3 together, below the USD 5 approval threshold; the result goes into `docs/tracks/DATA_AGENT.md`.
+- The acceptance runs cost about USD 3 together, below the USD 5 approval threshold; the results are recorded below.
 
 ### Results (2026-11-01)
 

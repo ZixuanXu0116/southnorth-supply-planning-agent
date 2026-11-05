@@ -2,7 +2,7 @@
 
 How this project keeps model and platform spend under control, what is measured, and the owner's part. Companion guides: [`SPEC_GUIDE.md`](SPEC_GUIDE.md), [`EVAL_GUIDE.md`](EVAL_GUIDE.md), [`PROMPT_CHANGES.md`](PROMPT_CHANGES.md).
 
-The budget is USD 130 per month for the model API and Databricks together (`STATUS.md` working agreements); Databricks stays on Free Edition through Phase B, so in practice the budget is the model API.
+The budget is USD 130 per month for the model API and Databricks together (the project log's working agreements); Databricks stays on Free Edition through Phase B, so in practice the budget is the model API.
 
 ## 1. What a run costs
 
@@ -31,7 +31,7 @@ Choices in this project that exist for the cache as much as for anything else:
 
 Silent invalidators to keep out of the prefix: timestamps or run identifiers in the system prompt, unsorted JSON in tool schemas, a tool list that differs between runs, prompt text rendered differently per run. The check is `cache_read` on every turn after the first: zero means something invalidated the prefix.
 
-Context editing and compaction (the context-management work planned in `STATUS.md`) interact with the cache: server-side compaction keeps the prefix and appends a compaction block; our own summary at a question boundary starts a new prefix, which is acceptable only at boundaries.
+Context editing and compaction (the context-management work planned in the project log) interact with the cache: server-side compaction keeps the prefix and appends a compaction block; our own summary at a question boundary starts a new prefix, which is acceptable only at boundaries.
 
 ## 3. The levers, in the order they are pulled
 
@@ -53,7 +53,7 @@ Not a lever here: the Batch API (half price, asynchronous). It fits single reque
 | Cost, tokens, turns, SQL statements, wall clock per run | run result and trace; `runs/evals/<batch>/results.jsonl` |
 | Cost per question, per arm, per category | `evals/reports/<batch>.md` |
 | Cache-read share per batch | computed from the usage totals (to be added to the report template) |
-| Spend per session | `STATUS.md` entry of the session |
+| Spend per session | the project log entry of the session |
 | Monthly spend against the budget | the API console; the owner's monthly review (§5) |
 | Budget stops | `--max-usd` on `snm-evals run` stops launching new runs; `maxUsdPerRun` stops one run |
 
@@ -61,7 +61,7 @@ Targets (`PROPOSAL.md` §10.9): planner plus intake cost per case at the median 
 
 ## 5. How the owner takes part
 
-- **Monthly review.** At the start of each month the owner reads the previous month's spend (API console) next to the `STATUS.md` session entries and sets the split for the coming month: development batches, milestone runs, platform. The assistant does not start a run that would exceed the month's development share.
+- **Monthly review.** At the start of each month the owner reads the previous month's spend (API console) next to the project log's session entries and sets the split for the coming month: development batches, milestone runs, platform. The assistant does not start a run that would exceed the month's development share.
 - **Approval above a threshold.** A single batch expected to cost more than USD 5 waits for the owner's go (the expected cost is stated with the batch name and the number of runs); every milestone run (G4) waits regardless of cost.
 - **Cost line of every report.** Every report states cost per question and the cache-read share; the owner reads that line with the pass rate. A pass-rate gain that doubles cost is a trade-off for the owner, not a win.
 - **Cache audit exercise (once).** The owner opens one trace, identifies what sits in the cached prefix (tools, prompt, KB index) and what is per-run (question, tool results), and checks that `cache_read` is non-zero from the second turn. Then the quiz: which of these would break the cache: the as-of date in the system prompt; a tool added after the first turn; a different model for one turn; a KB page read in turn three. (Answers: the first three; the fourth is just new tokens.)

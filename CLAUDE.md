@@ -6,18 +6,7 @@ Project conventions for AI coding assistants and contributors.
 
 Verified supply-planning agent (planner copilot) for the warehouse logistics and purchasing teams of the fictional company **SouthNorth Solutions**: a deterministic replenishment engine, an internal planner agent, and an isolated supplier-facing intake agent, built on the verified analytics agent of v1. Design: [`docs/PROPOSAL.md`](docs/PROPOSAL.md) (v2; v1 archived under `docs/archive/`). Data model: [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md).
 
-**Start every session by reading [`docs/STATUS.md`](docs/STATUS.md)** (current state, next steps, pending owner actions, working agreements), and update it before the session ends.
-
 Process guides: [`docs/SPEC_GUIDE.md`](docs/SPEC_GUIDE.md) (how a change is specified and decided; decision records in `docs/decisions/`), [`docs/EVAL_GUIDE.md`](docs/EVAL_GUIDE.md) (gates, case generation, metrics, the owner's part), [`docs/PROMPT_CHANGES.md`](docs/PROMPT_CHANGES.md) (failure cards in `evals/failures/`, prompt versions, the owner's checkpoints), [`docs/COST_GUIDE.md`](docs/COST_GUIDE.md) (caching, cost levers, budget, the owner's approvals).
-
-## Language rules
-
-- **English only** for every project artifact:
-  - Repository: code, comments, docstrings, Markdown, prompts, `kb/`, eval cases and reports, contracts, data values, UI text, commit messages.
-  - GitHub: PR titles and descriptions, issues, review comments and replies.
-  - Databricks: catalog, schema, table, and column names and comments, tags, metric views, functions, notebooks, jobs, dashboards, MLflow experiments, runs, parameters, and tags.
-- **Explanations to the project owner are mainly in Simplified Chinese**, with technical terms kept in English (identifiers, table and column names, metric names, tools, commands, file paths). This covers chat replies and progress updates, and owner-only material that is not committed or published to GitHub or Databricks (for example claude.ai artifact pages and scratchpad reports).
-- Never let Chinese text leak into artifacts: translate anything the owner writes in Chinese before it goes into the repository, GitHub, or Databricks.
 
 ## Architecture boundaries
 

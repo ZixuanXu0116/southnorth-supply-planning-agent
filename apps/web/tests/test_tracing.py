@@ -1,4 +1,4 @@
-"""App agent runs queued for MLflow (the owner, 2026-11-02): in the background, never failing the run."""
+"""App agent runs queued for MLflow (decided 2026-11-02): in the background, never failing the run."""
 
 from __future__ import annotations
 

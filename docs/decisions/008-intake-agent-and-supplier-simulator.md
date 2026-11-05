@@ -10,7 +10,7 @@
 
 Phases A and B are done: the engine opens cases and prices every option's stock-out risk (record 002), purchasing approves each request with a mandate (record 004), suppliers answer on the portal with messages and sheets (record 005), the case server ranks the proposals (record 007), and the planner agent explains them. Every supplier answer so far came from the owner playing the supplier.
 
-The second role play (2026-10-20, `STATUS.md`) showed the step that is still manual: all three first offers missed a mandate field, purchasing asked the supplier for the first offer's terms without the 80 USD freight and for an earlier date, and the supplier's answer brought two offers inside the mandate, 80 USD cheaper in expected cost. Record 004 already decided that this exchange belongs to an intake agent for agent-eligible cases (`PROPOSAL.md` §4.3): bounded negotiation under the mandate, never stating a ceiling, never accepting, escalating outside it, and facing a real supplier only after the simulator shows recovery of at least 90 %, zero commitments, and zero leaks.
+The second role play (2026-10-20, the project log) showed the step that is still manual: all three first offers missed a mandate field, purchasing asked the supplier for the first offer's terms without the 80 USD freight and for an earlier date, and the supplier's answer brought two offers inside the mandate, 80 USD cheaper in expected cost. Record 004 already decided that this exchange belongs to an intake agent for agent-eligible cases (`PROPOSAL.md` §4.3): bounded negotiation under the mandate, never stating a ceiling, never accepting, escalating outside it, and facing a real supplier only after the simulator shows recovery of at least 90 %, zero commitments, and zero leaks.
 
 What exists: the case server's intake profile (`build_intake`: `get_request`, `record_message` with the outgoing-text check that refuses figures outside the outward fields and the supplier's own figures and other suppliers' names, `record_proposal`, `escalate`), the six-message cap, the proposal schema, the portal and the sheet parser. What is missing: the agent itself (a harness profile, its prompt, the loop that runs it when a supplier writes), the negotiation behavior, a simulator to talk to, and the measurements of `PROPOSAL.md` §10.2 (L14 triage and escalation, L15 supplier conversation).
 
@@ -85,4 +85,4 @@ The intake agent gets its own prompt (`prompts/intake/v1.md`) under `PROMPT_CHAN
 
 - Record 004 (mandate, negotiation bounds, the 90 % / zero / zero bar), record 005 (portal and sheets), record 007 (ranking).
 - `PROPOSAL.md` §4.3 (eligibility and escalation triggers), §5.5 (intake agent), §7.2 (policies), §10.2 (L14, L15).
-- The role plays of 2026-10-19 and 2026-10-20 (`STATUS.md`).
+- The role plays of 2026-10-19 and 2026-10-20 (the project log).

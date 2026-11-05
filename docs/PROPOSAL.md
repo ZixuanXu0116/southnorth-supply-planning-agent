@@ -1,7 +1,7 @@
 # Verified Supply-Planning Agent for Warehouse Logistics — Design Proposal
 
 Status: **Draft v2.0** · Last updated: 2026-10-12 · Supersedes v1 (the analytics-only design, archived as [`archive/PROPOSAL_v1.md`](archive/PROPOSAL_v1.md))
-Companion documents: [`DATA_MODEL.md`](DATA_MODEL.md) (v2 update planned in Phase A), [`STATUS.md`](STATUS.md)
+Companion documents: [`DATA_MODEL.md`](DATA_MODEL.md) (v2 update planned in Phase A)
 
 ---
 

@@ -193,7 +193,7 @@ export function writeBlockReason(
 
 /**
  * Why a write must wait for a turn of its own, or undefined. The write ends the task, so it may not share a
- * turn with other calls: their results would arrive after the write was composed (the owner, 2026-11-02).
+ * turn with other calls: their results would arrive after the write was composed (decided 2026-11-02).
  */
 export function aloneReason(name: string, writeTools: ReadonlySet<string>, callsInTurn: readonly string[]): string | undefined {
 	if (!writeTools.has(name) || callsInTurn.length <= 1) return undefined;

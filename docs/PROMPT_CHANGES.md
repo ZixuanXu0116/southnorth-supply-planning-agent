@@ -18,7 +18,7 @@ Model, effort, and budgets are configuration, not prompts: changing them needs a
 - A shipped version is never edited. A change is a new file `v<n+1>.md`; the profile's version constant moves to it in one commit with the measurement that justifies it.
 - The frozen prefix stays stable within a version: role, as-of date, and task text enter through placeholders; nothing time-dependent is written into the prefix (prompt caching depends on it).
 - Instruction changes during a run are appended as messages, never edits of earlier turns (`PROPOSAL.md` §5.3).
-- A version's rationale lives in the failure cards and the report that adopted it, linked from the `STATUS.md` entry.
+- A version's rationale lives in the failure cards and the report that adopted it, linked from the project log entry.
 
 ## 3. When a change may start
 
@@ -53,10 +53,10 @@ A card is written for every failure of a G2–G4 run (`EVAL_GUIDE.md` §2) that 
 | 3. Diff | assistant | Write `v<n+1>.md`; list in the card the exact lines added, removed, or changed, each with the failure it addresses. One behavior per version where possible; no rewrite of unrelated text. |
 | 4. Diff review | **owner** | Read the diff with the checklist of §6. Approve, amend, or reject. An amendment by the owner is written by the owner into the version file. |
 | 5. Measure | assistant | Run the affected categories of the `dev` split with the new and the previous version, same model and effort, same cases, paired (G2). One repetition to screen; three before adopting. A regression in a category the change did not target blocks adoption. |
-| 6. Decide | **owner** | Adopt, revert, or iterate, from the paired numbers. The decision, the numbers, and the batch name go into the card; `STATUS.md` gets one line; the regression case is added to the suite. |
+| 6. Decide | **owner** | Adopt, revert, or iterate, from the paired numbers. The decision, the numbers, and the batch name go into the card; the project log gets one line; the regression case is added to the suite. |
 | 7. Weekly failure review | both | Walk through the open cards: which to chase next, which to close as `wontfix` with a reason, which cases to retire or rewrite. |
 
-The owner may delegate steps 2 and 4 for a class of cards (for example `tool error` cards) by saying so in `STATUS.md` working agreements; otherwise every card waits for them.
+The owner may delegate steps 2 and 4 for a class of cards (for example `tool error` cards) by saying so in the project log's working agreements; otherwise every card waits for them.
 
 ## 6. Owner's diff checklist
 
@@ -84,5 +84,5 @@ The owner may delegate steps 2 and 4 for a class of cards (for example `tool err
 | Prompt versions | `prompts/<profile>/v<n>.md` |
 | Failure cards | `evals/failures/<batch>-<case_id>.md` |
 | Paired measurements | `evals/reports/<batch>.md` (and MLflow) |
-| Adoption or reversal | the card's status; one line in `STATUS.md` "Done"; the version constant in the harness |
+| Adoption or reversal | the card's status; one line in the project log; the version constant in the harness |
 | Regression case | the suite the failure came from, with the card linked in `notes` |

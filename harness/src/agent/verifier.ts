@@ -222,7 +222,7 @@ export function untracedFigures(text: string, sources: unknown[]): string[] {
 /**
  * Typed terms of a supplier proposal that a rationale may cite (validity, surcharge, price, splits). The
  * supplier's own words (its messages, a proposal's free-text conditions) never reach the verifier: they go to
- * purchasing through the planner only (the owner, 2026-11-01).
+ * purchasing through the planner only (decided 2026-11-01).
  */
 const PROPOSAL_FIELDS = [
 	"proposal_id",

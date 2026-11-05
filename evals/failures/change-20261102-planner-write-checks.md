@@ -1,7 +1,7 @@
 # Change card: the planner's write checked by default, two attempts, then a visible failure
 
 - **Status:** adopted 2026-11-02 (the owner: build both, the figure check on by default; this reverses the 2026-11-01 decision of [`change-20261101-verifier-form`](change-20261101-verifier-form.md), "no runtime check by default", for the figure check only; the verifier sub-agent and the facts check stay off by default)
-- **Trigger:** the owner's interview practice (2026-11-02): the numbers in the free-text rationale were not checked, while the data agent's answers are (faithfulness gate); a refused write was limited only by the turn and cost budgets and could end without anything visible to purchasing
+- **Trigger:** a review of the planner's checks (2026-11-02): the numbers in the free-text rationale were not checked, while the data agent's answers are (faithfulness gate); a refused write was limited only by the turn and cost budgets and could end without anything visible to purchasing
 - **Agent:** the planner (prompt v6, unchanged); **layers:** harness (`agent/planner.ts`, `agent/verifier.ts` `untracedFigures`, `cli/case.ts`), pages (the planner note card)
 
 ## What changes

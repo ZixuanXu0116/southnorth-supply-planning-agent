@@ -1074,7 +1074,7 @@ def test_supplier_answers_with_the_sheet_and_purchasing_decides(service):
     assert service.recommended_proposal(CASE) == proposals[0].proposal_id
     with pytest.raises(CaseError, match="not an option"):
         service.decide(PURCHASING, CASE, "P-9-9-" + CASE)
-    # Anything but the recommended option needs a one-line reason (the owner, 2026-10-20).
+    # Anything but the recommended option needs a one-line reason (decided 2026-10-20).
     with pytest.raises(CaseError) as error:
         service.decide(PURCHASING, CASE, proposals[1].proposal_id, "  ")
     assert error.value.code == "RATIONALE_REQUIRED" and proposals[0].proposal_id in str(error.value)
@@ -1133,3 +1133,51 @@ def test_evaluation_accepts_days_as_text_from_the_lakehouse(service):
     )
     result = service.evaluate_option(PURCHASING, CASE, event.payload["proposal_ids"][0])
     assert result["coverage_date"] == "2026-09-25" and result["days_below_zero"] == 0
+
+
+def test_a_decision_against_the_planners_recommendation_needs_a_reason_and_is_kept_as_feedback(service):
+    """Decided 2026-11-05: purchasing may override the planner, with a one-line reason; the decision records
+    what was recommended and whether it was followed. A newer offer makes the recommendation out of date."""
+    service.draft_supplier_request(PLANNER, CASE, "expedite", REQUEST)
+    service.append(PURCHASING, CASE, "request_sent", {"channel": "portal", "handled_by": "human"})
+    service.record_proposal(PURCHASING, CASE, [
+        {"option_id": 1, "kind": "expedite", "quantity": 20, "arrival_date": "2026-09-25"},
+        {"option_id": 2, "kind": "expedite", "quantity": 20, "arrival_date": "2026-09-24",
+         "surcharge_pct": 1.0},
+    ])  # fmt: skip
+    ranking = service.rank_options(PURCHASING, CASE)
+    ranked = [
+        {"option": r["option"], "evaluation_id": r["evaluation_id"], "rank": r["rank"]}
+        for r in ranking["ranked"]
+    ]
+    first, second = ranked[0]["option"], ranked[1]["option"]
+    service.propose_recommendation(PLANNER, CASE, ranked, second, "The second offer arrives a day earlier.")
+    assert service.recommended_choice(CASE) == second
+    with pytest.raises(CaseError) as error:
+        service.decide(PURCHASING, CASE, first)
+    assert error.value.code == "RATIONALE_REQUIRED" and second in str(error.value)
+    decided = service.decide(PURCHASING, CASE, first, "The cheaper offer is early enough.")[0]
+    assert decided.payload["recommended"] == second and decided.payload["followed_recommendation"] is False
+
+
+def test_a_newer_offer_puts_the_servers_recommendation_back_in_force(service):
+    service.draft_supplier_request(PLANNER, CASE, "expedite", REQUEST)
+    service.append(PURCHASING, CASE, "request_sent", {"channel": "portal", "handled_by": "human"})
+    service.record_proposal(PURCHASING, CASE, [
+        {"option_id": 1, "kind": "expedite", "quantity": 20, "arrival_date": "2026-09-25"},
+        {"option_id": 2, "kind": "expedite", "quantity": 20, "arrival_date": "2026-09-24",
+         "surcharge_pct": 1.0},
+    ])  # fmt: skip
+    ranking = service.rank_options(PURCHASING, CASE)
+    ranked = [
+        {"option": r["option"], "evaluation_id": r["evaluation_id"], "rank": r["rank"]}
+        for r in ranking["ranked"]
+    ]
+    service.propose_recommendation(PLANNER, CASE, ranked, ranked[1]["option"], "The second arrives earlier.")
+    service.record_proposal(PURCHASING, CASE, [
+        {"option_id": 3, "kind": "expedite", "quantity": 20, "arrival_date": "2026-09-23"},
+    ])  # fmt: skip
+    assert service.recommended_choice(CASE) == service.recommended_proposal(CASE)
+    chosen = service.recommended_proposal(CASE)
+    decided = service.decide(PURCHASING, CASE, chosen)[0]
+    assert decided.payload["followed_recommendation"] is True

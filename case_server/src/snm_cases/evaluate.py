@@ -81,7 +81,7 @@ class Evaluation:
         out["coverage_date"] = self.coverage_date.isoformat() if self.coverage_date else None
         out["first_short_day"] = self.first_short_day.isoformat() if self.first_short_day else None
         out["risk_window_end"] = self.risk_window_end.isoformat() if self.risk_window_end else None
-        # Shown and cited as a percentage with two decimals (the owner, 2026-10-19).
+        # Shown and cited as a percentage with two decimals (decided 2026-10-19).
         out["stockout_risk"] = None if self.stockout_risk is None else f"{self.stockout_risk * 100:.2f}%"
         if not cost_access:
             for key in (

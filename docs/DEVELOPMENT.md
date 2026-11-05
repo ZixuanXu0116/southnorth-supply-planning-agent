@@ -2,13 +2,12 @@
 
 ## Where to start reading
 
-1. [`STATUS.md`](STATUS.md): what is done, what comes next, lessons learned.
-2. [`PROPOSAL.md`](PROPOSAL.md): the design (§3 architecture, §4 engine and flows, §5 agents, §7 guardrails, §10 evaluation).
-3. [`TECHNICAL.md`](TECHNICAL.md): technical notes (process boundaries, context, caching, memory, the loop).
-4. [`DATA_MODEL.md`](DATA_MODEL.md): sites, SAP tables, traps, scenarios.
-5. [`decisions/`](decisions/): decision records.
-6. [`../kb/INDEX.md`](../kb/INDEX.md): the agents' knowledge base.
-7. [`../evals/reports/`](../evals/reports/): evaluation reports (data snapshot, arms, model, cost, failures).
+1. [`PROPOSAL.md`](PROPOSAL.md): the design (§3 architecture, §4 engine and flows, §5 agents, §7 guardrails, §10 evaluation).
+2. [`TECHNICAL.md`](TECHNICAL.md): technical notes (process boundaries, context, caching, memory, the loop).
+3. [`DATA_MODEL.md`](DATA_MODEL.md): sites, SAP tables, traps, scenarios.
+4. [`decisions/`](decisions/): decision records.
+5. [`../kb/INDEX.md`](../kb/INDEX.md): the agents' knowledge base.
+6. [`../evals/reports/`](../evals/reports/): evaluation reports (data snapshot, arms, model, cost, failures).
 
 ## What is built
 

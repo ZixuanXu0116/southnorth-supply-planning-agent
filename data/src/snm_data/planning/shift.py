@@ -1,4 +1,4 @@
-"""Move a planning run to another day (the owner, 2026-11-02: the case server always works on the real today,
+"""Move a planning run to another day (decided 2026-11-02: the case server always works on the real today,
 so the synthetic planning data is moved to today before a test).
 
 Every date of the run moves by the same number of days: date and timestamp columns, ISO dates inside text

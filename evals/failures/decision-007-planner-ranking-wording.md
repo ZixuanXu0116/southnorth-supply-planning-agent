@@ -1,6 +1,6 @@
 # Change card: decision record 007 / planner wording of purchasing's ranking
 
-- **Status:** adopted 2026-10-20 (`planner/v5`, under the delegated class of change)
+- **Status:** adopted 2026-10-20 (`planner/v5`, by the rule for wording changes)
 - **Trigger:** decision record 007 (`PROMPT_CHANGES.md` §3, item 2), not a failed run: the case server now ranks proposals by expected cost and lets a C part's late offer compete; the planner's tool description and evaluate instructions still name rule (a)
 - **Batch, arm, repetition:** `planner-evaluate-v4-rule007`, `planner/v4`, rep 1 (the baseline under the new rule)
 - **Prompt version and digest:** `planner/v4`
@@ -39,7 +39,7 @@ The planner-evaluate suite (four mixes; the `cheaper_late_split` mix on C parts 
 ## Owner review
 
 - Hypothesis review (2026-10-20): confirmed by the owner, layer: tool description and evaluate instructions.
-- Diff review (2026-10-20): approved by the owner as written. The owner delegated this class of change (wording aligned with a decided rule) to the assistant from now on (`STATUS.md`, working agreements).
+- Diff review (2026-10-20): approved by the owner as written. From then on, wording aligned with a decided rule is adopted by the rule for wording changes, without a further review.
 
 ## Measurement
 
@@ -54,5 +54,5 @@ No rationale states rule (a). The prepare suite with v5 (`planner-prepare-v5`) p
 
 ## Decision
 
-Adopted 2026-10-20 by the assistant under the owner's delegation for wording aligned with a decided rule (`STATUS.md`, working agreements): `PLANNER_PROMPT_VERSION` is `v5`, the default of both planner suites; v4 stays selectable for comparisons.
+Adopted 2026-10-20 by the rule for wording changes (wording aligned with a decided rule): `PLANNER_PROMPT_VERSION` is `v5`, the default of both planner suites; v4 stays selectable for comparisons.
 

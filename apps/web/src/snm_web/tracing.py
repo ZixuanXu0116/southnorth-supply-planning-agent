@@ -1,4 +1,4 @@
-"""App agent runs as MLflow traces (the owner, 2026-11-02): evaluation and production traces in one place.
+"""App agent runs as MLflow traces (decided 2026-11-02): evaluation and production traces in one place.
 
 After each agent run of the pages (the planner, the supplier-document extractor), its ``trace.jsonl`` is
 rebuilt into one MLflow trace exactly as an evaluation batch's runs are (``snm_evals.tracking``), in a

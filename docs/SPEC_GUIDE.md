@@ -16,11 +16,9 @@ Specs are not one document. They are layered, and every layer below the first is
 | Semantics | `semantic/metric_views/*.yaml`; `kb/**/*.md` with front matter | Metric definitions; agent-facing definitions, traps, and guides | Metric-view tests; eval cases name the pages they require (`required_kb_docs`) |
 | Engine | `data/src/snm_data/planning/params.py` (defaults of §14), module docstrings, `data/tests/test_planning.py` | Projection arithmetic, lever rule, triage | Hand-computed references, property tests, replay, oracle |
 | Agent behavior | `prompts/<profile>/v<n>.md`; tool schemas in `tool_server/` and `case_server/`; the task instructions in `harness/src/agent/planner.ts`; `evals/cases/*.yaml` | What the agent is told, what it can call, what it must do on each case | Evaluation runs (the gates of `EVAL_GUIDE.md` §2) |
-| Working state | [`STATUS.md`](STATUS.md) | What is done, what is next, what waits on whom, what we learned | Read at session start, updated at session end |
 
 Rules that hold across layers:
 
-- English only in every artifact (`CLAUDE.md`).
 - Synthetic data only; never a real company, material, supplier, or volume.
 - Prefer a deterministic implementation wherever the layer gives a clear spec; a model call is for the parts no spec can pin down.
 - A spec that a machine can check (contract, test, eval case) beats one only a person can read. When both exist, the machine-checked one wins on conflict, and the prose gets fixed.
@@ -36,7 +34,7 @@ Rules that hold across layers:
 | Prompt or task instruction | `PROMPT_CHANGES.md` protocol (failure card → hypothesis → new version → paired measurement) |
 | Tool added or changed | tool schema and server check → tests → KB guide if the agent needs to know when to use it → eval cases that exercise it |
 | Model, effort, or budget | configuration only; a decision record with the measured cost and quality difference |
-| Scaffolding, performance, bulk operations | an increment note in `STATUS.md`; tests; no decision record unless behavior changes |
+| Scaffolding, performance, bulk operations | an increment note in the project log; tests; no decision record unless behavior changes |
 
 ## 3. Two sizes of spec
 
@@ -48,7 +46,7 @@ Rules that hold across layers:
 - changes the model, effort, or budget of a profile;
 - or reverses an earlier decision.
 
-**An increment note** (a dated entry in `STATUS.md` "Done") is enough for plumbing, refactors, performance work, test additions, documentation, and bug fixes whose expected behavior was already specified. An increment note still names the tests or evals that cover it.
+**An increment note** (a dated entry in the project log) is enough for plumbing, refactors, performance work, test additions, documentation, and bug fixes whose expected behavior was already specified. An increment note still names the tests or evals that cover it.
 
 When unsure, write the decision record: it is short, and the owner questions in it are the point.
 
@@ -79,7 +77,7 @@ The goal is that every decision is understood by the owner well enough to defend
   3. Does Acceptance name a suite or test and an expected number?
   4. Does the change keep every §7.2 policy and the non-negotiables of `CLAUDE.md`?
   5. If the decision is wrong, how will we notice, and how do we go back?
-- **Reading order** to understand a finished change: the decision record → the evaluation report it cites → the diff. The assistant links all three in the `STATUS.md` entry.
+- **Reading order** to understand a finished change: the decision record → the evaluation report it cites → the diff. The assistant links all three in the project log entry.
 - **Questions back to the assistant are part of the process**, not an interruption. A question that cannot be answered from the spec means the spec is missing something; the answer goes into the record, not only into chat.
 
 ## 6. Spec hygiene
@@ -87,4 +85,3 @@ The goal is that every decision is understood by the owner well enough to defend
 - Keep `PROPOSAL.md` the source of intent; when a decision changes it, edit the affected section and cite the record number there.
 - Keep contract comments, KB pages, and engine docstrings saying the same thing as the decision; the evaluation refresh after a change is the moment to check (`EVAL_GUIDE.md` §2, gate G1).
 - Retire specs explicitly: a KB page gets `status: deprecated`, a case gets removed with a note in the suite header, a record gets `superseded by`.
-- Owner-only explanations (chat, artifact pages) may be in Chinese; everything in this repository, GitHub, and Databricks is English.

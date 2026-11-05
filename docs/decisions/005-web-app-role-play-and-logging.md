@@ -66,7 +66,7 @@ Draft, to be fixed with the decision:
 
 ## Consequences
 
-A second Python package (`apps/web`, `snm-web`) with FastAPI, Jinja2, and `openpyxl` as dependencies; the case model gains `mandate_set` and the attachment table; the proposal schema gains `within_mandate`; the harness gains nothing (the app calls its headless CLI). The supplier page is the first external-facing surface, so its template must never receive a case object, only `outward_fields`, and a test asserts it. Databricks Apps stay deferred. Open: the login for lakehouse mode (role principals are not provisioned yet, `STATUS.md` pending actions).
+A second Python package (`apps/web`, `snm-web`) with FastAPI, Jinja2, and `openpyxl` as dependencies; the case model gains `mandate_set` and the attachment table; the proposal schema gains `within_mandate`; the harness gains nothing (the app calls its headless CLI). The supplier page is the first external-facing surface, so its template must never receive a case object, only `outward_fields`, and a test asserts it. Databricks Apps stay deferred. Open: the login for lakehouse mode (role principals are not provisioned yet, the project log's pending actions).
 
 ## Evidence
 

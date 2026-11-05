@@ -8,7 +8,7 @@
 
 ## Context
 
-**The owner's goal** (role play of 2026-10-19, `STATUS.md`): stay conservative today, and become able to tell, material by material, when a cheaper strategy does not put production at risk, or risks less than it saves. The trigger was Blue Fen's split offer for `C-US10-40001795-SH-20261122`: 425.64 USD cheaper than the in-mandate offer, no projected day below zero, but its second part after the trigger date and 18 days below safety stock (against 8). The mandate's arrival check (the minimum quantity by the latest arrival date) marked it outside; the owner chose the in-mandate offer because the forecast's later days are not reliable enough to bet on.
+**The owner's goal** (role play of 2026-10-19, the project log): stay conservative today, and become able to tell, material by material, when a cheaper strategy does not put production at risk, or risks less than it saves. The trigger was Blue Fen's split offer for `C-US10-40001795-SH-20261122`: 425.64 USD cheaper than the in-mandate offer, no projected day below zero, but its second part after the trigger date and 18 days below safety stock (against 8). The mandate's arrival check (the minimum quantity by the latest arrival date) marked it outside; the owner chose the in-mandate offer because the forecast's later days are not reliable enough to bet on.
 
 **How the forecast works today** (engine 1.0.1): firm demand from the released production orders' reservations (visible 3 to 10 days ahead, `inputs._production_demand`), the planned orders' dependent requirements for weeks 2 to 13 at the extraction (`_planned_demand`), and the trailing 28-day rate of staging to production, netted per week against the explicit requirements (`engine._forecast`). Every decision rule reads a point forecast: days below zero, the levers' coverage, the mandate's arrival check.
 
@@ -82,4 +82,4 @@ Phase 1 changes nothing in the engine. Phases 3 and 4 add columns to the plannin
 - `evals/reports/forecast-accuracy-small.md` (`uv run snm-data forecast-backtest`, module `snm_data.planning.backtest`).
 - `evals/reports/engine-replay-small.md` (recall of the current engine).
 - `evals/reports/engine-demand-shape.md` (the first draft's evidence, on the hub projection).
-- The role play of 2026-10-19 (`STATUS.md`) and `evals/failures/roleplay-20261019-C-US10-40001795-SH-20261122.md`.
+- The role play of 2026-10-19 (the project log) and `evals/failures/roleplay-20261019-C-US10-40001795-SH-20261122.md`.

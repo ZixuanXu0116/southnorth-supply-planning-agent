@@ -332,6 +332,10 @@ class DecisionRequested(Strict):
 class DecisionRecorded(Strict):
     choice: str  # a proposal_id, an engine lever name, or no_action
     rationale_text: str = Field(default="", max_length=2000)
+    # Set by the case server: what the decision was compared with (the planner's recommendation when one is in
+    # force, else the server's), and whether purchasing followed it. An override carries its reason.
+    recommended: str | None = None
+    followed_recommendation: bool | None = None
 
 
 class HandoffDrafted(Strict):

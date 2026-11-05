@@ -113,7 +113,7 @@ export function readImproverModel(env: Env = process.env): ModelRole {
 
 /**
  * The planner's model for one task: the main model, with the task's own effort when one is set
- * (`SNM_EFFORT_MAIN_PREPARE`, `SNM_EFFORT_MAIN_EVALUATE`, `SNM_EFFORT_MAIN_HANDOFF`; the owner, 2026-11-02:
+ * (`SNM_EFFORT_MAIN_PREPARE`, `SNM_EFFORT_MAIN_EVALUATE`, `SNM_EFFORT_MAIN_HANDOFF`; decided 2026-11-02:
  * effort by the task's complexity), else `SNM_EFFORT_MAIN`.
  */
 export function plannerModelFor(main: ModelRole, task: string, env: Env = process.env): ModelRole {

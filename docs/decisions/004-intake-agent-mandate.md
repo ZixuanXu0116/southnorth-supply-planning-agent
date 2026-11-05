@@ -88,5 +88,5 @@ The case model gains a `mandate` object and a `mandate_set` event; the proposal 
 ## Evidence
 
 - `PROPOSAL.md` §4.3 (triage and escalation triggers), §5.5 (intake agent), §7.2 (domain policies).
-- The owner's system design and the assistant's review (chat, 2026-10-17; the agreed points are recorded in `STATUS.md`).
+- The owner's system design and the assistant's review (2026-10-17).
 - Record 003 (the business model the cases come from).

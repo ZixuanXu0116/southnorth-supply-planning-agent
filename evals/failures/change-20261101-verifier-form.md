@@ -64,7 +64,7 @@ The evaluate task in every mix.
 
 ## Owner review
 
-- Hypothesis review (2026-11-01): approved, with the first pass capped at USD 5 (a small overrun is acceptable if reported).
+- Hypothesis review (2026-11-01): approved, with the first pass capped at USD 5.
 - Diff review (2026-11-01): the three texts of arm C approved as written; arm B's keyword check approved.
 
 ## Measurement (proposed)

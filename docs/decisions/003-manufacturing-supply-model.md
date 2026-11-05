@@ -8,7 +8,7 @@
 
 ## Context
 
-On 2026-10-16 the owner stated that the system's picture of the business is wrong. The owner's picture, in their words translated:
+On 2026-10-16 the owner stated that the system's picture of the business is wrong. The owner described the business as follows:
 
 > The hub is a cheaper, larger warehouse where we keep what is not needed right away. The spoke is our real main warehouse: when the company's own manufacturing department tells us what it needs, we scan and ship from the main warehouse. If the main warehouse is short, it is replenished from the hub; if the hub does not have it either, we place a new order with the supplier or expedite an order that is placed but not yet delivered. There are no external customers. Our relationship with suppliers is to get more, or to get it sooner.
 
@@ -109,6 +109,6 @@ Still open (next increments): generator 0.8 (customer flows removed, outbound de
 
 ## Evidence
 
-- The owner's statements of 2026-10-16 (chat; quoted above in translation).
+- The owner's statements of 2026-10-16 (quoted above).
 - Repository counts of 2026-10-16 (this record, Context).
 - `DATA_MODEL.md` §1.1 (the model being replaced).
