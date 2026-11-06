@@ -1,17 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 816" width="760" height="816" role="img" aria-labelledby="t2 d2">
   <title id="t2">One planner task, turn by turn</title>
-  <desc id="d2">The harness starts the task and repeats turns: it sends the context to the model, the model replies, every tool call is checked before it runs, reads run freely and the task's one write is checked by the harness (every figure traced to an evaluation) and then by the case server, the result is appended, and finishTurn decides whether to stop. A refused write comes back as an error with a hint; after a second refusal the task stops and leaves a note for purchasing.</desc>
+  <desc id="d2">The harness starts the task and repeats turns: it sends the context to the model, the model replies, every tool call is checked before it runs, reads run freely and the task's one write is checked by the harness (every figure traced to an evaluation) and then by the case server, the result is appended, and finishTurn decides whether to stop. A refused write comes back as an error with a hint; after a second refusal the task stops and leaves a note for purchasing. The result goes back to the case pages.</desc>
   <style>
     svg { --bg: #f7f8fa; --fg: #1d2430; --muted: #5b6474; --panel: #ffffff; --line: #8a93a3;
-          --frame: #b9c0cc; --accent: #0b6e4f; --warn: #b4530a; }
+          --frame: #b9c0cc; --harness: #e4f1ea; --accent: #0b6e4f; --warn: #b4530a; }
     @media (prefers-color-scheme: dark) {
       svg { --bg: #141820; --fg: #e6e9ef; --muted: #a2abba; --panel: #1c212b; --line: #6d7686;
-            --frame: #4a5262; --accent: #5fd3a8; --warn: #f0a35a; }
+            --frame: #4a5262; --harness: #1b2d26; --accent: #5fd3a8; --warn: #f0a35a; }
     }
     .bg { fill: var(--bg); }
     .box { fill: var(--panel); stroke: var(--line); stroke-width: 1; }
     .side { fill: var(--panel); stroke: var(--line); stroke-width: 1; stroke-dasharray: 4 3; }
-    .frame { fill: none; stroke: var(--frame); stroke-width: 1.2; stroke-dasharray: 6 4; }
+    .frame { fill: var(--harness); stroke: var(--frame); stroke-width: 1.2; stroke-dasharray: 6 4; }
     .edge { fill: none; stroke: var(--fg); stroke-width: 1.3; }
     .loop { fill: none; stroke: var(--accent); stroke-width: 2; }
     .reject { fill: none; stroke: var(--warn); stroke-width: 1.8; }
@@ -115,7 +115,7 @@
 
   <!-- 7 -->
   <rect class="box" x="200" y="762" width="360" height="36" rx="5"/>
-  <text class="t" x="380" y="784" text-anchor="middle"><tspan class="num">7</tspan>  Wrap up: trace saved; a note if refused twice</text>
+  <text class="t" x="380" y="784" text-anchor="middle"><tspan class="num">7</tspan>  Wrap up: result and trace; a note if refused twice</text>
   <rect class="side" x="580" y="764" width="150" height="34" rx="5"/>
   <text class="detail" x="655" y="785" text-anchor="middle">300 s wall clock → abort</text>
 </svg>

@@ -1,0 +1,123 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 630" width="920" height="630" role="img" aria-labelledby="t0 d0">
+  <title id="t0">How the system works</title>
+  <desc id="d0">Purchasing and suppliers use the case pages. The pages start an agent task and get its result back, and send people's actions to the case server and get the case view back. The agents (planner and extractor, in the TypeScript harness) send the context to the Claude API and get text and tool calls back; the planner sends tool calls to the case server over MCP and gets a result, or an error with a hint, back. The case server appends case events to Databricks and reads its tables. The replenishment engine reads the source data from Databricks and writes the planning tables. The pages, the agents, and the case server run in one Databricks App.</desc>
+  <style>
+    svg { --bg: #f7f8fa; --fg: #1d2430; --muted: #5b6474; --panel: #ffffff; --line: #8a93a3; --frame: #b9c0cc;
+          --model: #e9eef7; --harness: #e4f1ea; --server: #f8eedf; --lake: #eee8f6; --accent: #0b6e4f; --on-accent: #ffffff; }
+    @media (prefers-color-scheme: dark) {
+      svg { --bg: #141820; --fg: #e6e9ef; --muted: #a2abba; --panel: #1c212b; --line: #6d7686; --frame: #4a5262;
+            --model: #1f2733; --harness: #1b2d26; --server: #332a1c; --lake: #2a2435; --accent: #5fd3a8; --on-accent: #10231c; }
+    }
+    .bg { fill: var(--bg); }
+    .box { fill: var(--panel); stroke: var(--line); stroke-width: 1; }
+    .model { fill: var(--model); } .harness { fill: var(--harness); }
+    .server { fill: var(--server); } .lake { fill: var(--lake); }
+    .frame { fill: none; stroke: var(--frame); stroke-width: 1.2; stroke-dasharray: 6 4; }
+    .edge { fill: none; stroke: var(--fg); stroke-width: 1.3; }
+    .name { font: 600 15px -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif; fill: var(--fg); }
+    .tag { font: 12px -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif; fill: var(--muted); }
+    .sub { font: 12.5px -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif; fill: var(--fg); }
+    .label { font: 11.5px -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif; fill: var(--muted); }
+    .frame-label { font: 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: var(--muted); }
+    .dot { fill: var(--accent); }
+    .num { font: 700 10px -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif; fill: var(--on-accent); }
+    .arrow { fill: var(--fg); }
+  </style>
+  <defs>
+    <marker id="c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="arrow" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+  </defs>
+  <rect class="bg" x="0" y="0" width="920" height="630"/>
+
+  <!-- People -->
+  <rect class="box" x="150" y="20" width="160" height="42" rx="21"/>
+  <text class="name" x="230" y="46" text-anchor="middle">Purchasing</text>
+  <rect class="box" x="610" y="20" width="160" height="42" rx="21"/>
+  <text class="name" x="690" y="46" text-anchor="middle">Suppliers</text>
+
+  <line class="edge" x1="216" y1="62" x2="216" y2="110" marker-end="url(#c)"/>
+  <line class="edge" x1="244" y1="110" x2="244" y2="62" marker-end="url(#c)"/>
+  <text class="label" x="208" y="88" text-anchor="end">asks, approves, decides</text>
+  <text class="label" x="252" y="88">case pages</text>
+  <line class="edge" x1="676" y1="62" x2="676" y2="110" marker-end="url(#c)"/>
+  <line class="edge" x1="704" y1="110" x2="704" y2="62" marker-end="url(#c)"/>
+  <text class="label" x="668" y="88" text-anchor="end">quotes, files</text>
+  <text class="label" x="712" y="88">supplier page</text>
+
+  <!-- Databricks App -->
+  <rect class="frame" x="50" y="98" width="820" height="254" rx="12"/>
+  <rect class="bg" x="398" y="90" width="124" height="16"/>
+  <text class="frame-label" x="460" y="102" text-anchor="middle">Databricks App</text>
+
+  <!-- Case pages -->
+  <rect class="box" x="70" y="112" width="780" height="58" rx="8"/>
+  <text class="name" x="460" y="137" text-anchor="middle">Case pages</text>
+  <text class="tag" x="460" y="157" text-anchor="middle">case queue · one page per case · supplier view</text>
+
+  <line class="edge" x1="216" y1="170" x2="216" y2="234" marker-end="url(#c)"/>
+  <line class="edge" x1="244" y1="234" x2="244" y2="170" marker-end="url(#c)"/>
+  <text class="label" x="208" y="207" text-anchor="end">start a task</text>
+  <text class="label" x="252" y="207">result</text>
+  <line class="edge" x1="676" y1="170" x2="676" y2="234" marker-end="url(#c)"/>
+  <line class="edge" x1="704" y1="234" x2="704" y2="170" marker-end="url(#c)"/>
+  <text class="label" x="668" y="207" text-anchor="end">people's actions</text>
+  <text class="label" x="712" y="207">case view</text>
+
+  <!-- Agents -->
+  <rect class="harness" x="70" y="236" width="310" height="96" rx="8"/>
+  <text x="88" y="262"><tspan class="name">Agents</tspan><tspan class="tag" dx="8">TypeScript harness</tspan></text>
+  <circle class="dot" cx="99" cy="282" r="8"/><text class="num" x="99" y="285.5" text-anchor="middle">2</text>
+  <circle class="dot" cx="118" cy="282" r="8"/><text class="num" x="118" y="285.5" text-anchor="middle">5</text>
+  <text class="sub" x="134" y="286.5">Planner: drafts requests, recommends</text>
+  <circle class="dot" cx="118" cy="307" r="8"/><text class="num" x="118" y="310.5" text-anchor="middle">3</text>
+  <text class="sub" x="134" y="311.5">Extractor: reads PDFs, images, Excel</text>
+
+  <!-- Case server -->
+  <rect class="server" x="540" y="236" width="310" height="96" rx="8"/>
+  <text x="558" y="262"><tspan class="name">Case server</tspan><tspan class="tag" dx="8">Python</tspan></text>
+  <circle class="dot" cx="569" cy="282" r="8"/><text class="num" x="569" y="285.5" text-anchor="middle">4</text>
+  <text class="sub" x="585" y="286.5">prices every option, checks every write</text>
+  <text class="sub" x="585" y="311.5">the only writer of cases</text>
+
+  <line class="edge" x1="380" y1="272" x2="538" y2="272" marker-end="url(#c)"/>
+  <line class="edge" x1="540" y1="296" x2="382" y2="296" marker-end="url(#c)"/>
+  <text class="label" x="460" y="264" text-anchor="middle">planner's tool calls (MCP)</text>
+  <text class="label" x="460" y="313" text-anchor="middle">result, or error + hint</text>
+
+  <line class="edge" x1="216" y1="332" x2="216" y2="402" marker-end="url(#c)"/>
+  <line class="edge" x1="244" y1="402" x2="244" y2="332" marker-end="url(#c)"/>
+  <text class="label" x="208" y="376" text-anchor="end">context</text>
+  <text class="label" x="252" y="376">text + tool calls</text>
+  <line class="edge" x1="676" y1="332" x2="676" y2="402" marker-end="url(#c)"/>
+  <line class="edge" x1="704" y1="402" x2="704" y2="332" marker-end="url(#c)"/>
+  <text class="label" x="668" y="376" text-anchor="end">append events</text>
+  <text class="label" x="712" y="376">read tables</text>
+
+  <!-- Claude API -->
+  <rect class="model" x="70" y="404" width="310" height="84" rx="8"/>
+  <text class="name" x="88" y="432">Claude API</text>
+  <text class="sub" x="88" y="456">the model, outside the app</text>
+  <text class="tag" x="88" y="476">its key stays in the harness</text>
+
+  <!-- Databricks -->
+  <rect class="lake" x="540" y="404" width="310" height="84" rx="8"/>
+  <text class="name" x="558" y="432">Databricks</text>
+  <text class="sub" x="558" y="456">planning tables, case events, files</text>
+  <text class="tag" x="558" y="476">Unity Catalog: grants, row filters, masks</text>
+
+  <line class="edge" x1="676" y1="488" x2="676" y2="546" marker-end="url(#c)"/>
+  <line class="edge" x1="704" y1="546" x2="704" y2="488" marker-end="url(#c)"/>
+  <text class="label" x="668" y="521" text-anchor="end">source data</text>
+  <text class="label" x="712" y="521">planning tables</text>
+
+  <!-- Engine -->
+  <rect class="box" x="540" y="548" width="310" height="66" rx="8"/>
+  <text x="558" y="573"><tspan class="name">Replenishment engine</tspan><tspan class="tag" dx="8">deterministic</tspan></text>
+  <circle class="dot" cx="569" cy="594" r="8"/><text class="num" x="569" y="597.5" text-anchor="middle">1</text>
+  <text class="sub" x="585" y="598.5">finds shortfalls, dates the options</text>
+
+  <!-- How to read -->
+  <text class="label" x="88" y="572">Each arrow: what moves, and which way.</text>
+  <text class="label" x="88" y="592">Numbers: the steps below.</text>
+</svg>

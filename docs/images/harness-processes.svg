@@ -48,7 +48,7 @@
   <!-- Harness -->
   <rect class="band-harness" x="16" y="158" width="888" height="136" rx="8"/>
   <text class="name" x="34" y="188">Harness</text>
-  <text class="sub" x="34" y="208">TypeScript process</text>
+  <text class="sub" x="34" y="208">TypeScript, one run per task</text>
   <text class="key" x="34" y="230">holds the model key</text>
   <text class="sub" x="34" y="250">decides what the model sees</text>
   <text class="sub" x="34" y="268">and when it stops</text>

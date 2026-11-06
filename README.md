@@ -8,27 +8,7 @@ A supply-planning copilot on synthetic SAP-shaped data: a deterministic engine f
 
 ## How it works
 
-```mermaid
-flowchart TB
-  purchasing(["Purchasing"])
-  suppliers(["Suppliers"])
-  pages["Case pages"]
-  planner["Planner agent<br/>drafts requests, recommends"]
-  extractor["Extractor<br/>reads PDFs, screenshots, Excel"]
-  caseserver["Case server<br/>prices options, checks every write,<br/>append-only events"]
-  engine["Replenishment engine<br/>deterministic"]
-  lake[("Databricks<br/>synthetic SAP data, tables, volumes,<br/>grants, row filters, masks")]
-
-  purchasing --> pages
-  suppliers --> pages
-  pages --> planner
-  pages --> extractor
-  planner -- "MCP" --> caseserver
-  pages --> caseserver
-  lake --> engine
-  engine -- "cases" --> caseserver
-  caseserver --> lake
-```
+![How it works: purchasing and suppliers use the case pages; the pages start an agent task and get its result, and send people's actions to the case server; the agents talk to the Claude API and, for the planner, to the case server over MCP; the case server appends case events to Databricks and reads its tables; the replenishment engine writes the planning tables](docs/images/system-overview.svg)
 
 1. The engine opens a case when projected stock falls short and dates its options (order, expedite, transfer) from today.
 2. The planner agent drafts the supplier request; purchasing approves it with a mandate (latest arrival, surcharge and freight ceilings).
@@ -43,11 +23,11 @@ flowchart TB
 - **Isolation.** Python tools run as MCP servers in their own processes with only their own credentials; the model's key never reaches them. Supplier text and documents are data, never instructions.
 - **Measured change.** Every fix starts from a traced failure (a failure card), is replayed before and after, and stays as a regression test.
 
-**Processes and boundaries**
+**Processes and boundaries**: one planner run, layer by layer (the colors of the picture above)
 
 ![Processes and boundaries: the model, the TypeScript harness, the Python case server, and Databricks, and what passes between them](docs/images/harness-processes.svg)
 
-**One planner task, turn by turn**
+**One planner task, turn by turn**: inside the harness
 
 ![One planner task, turn by turn: the context goes to the model, every tool call is checked, reads run freely, the one write is checked by the case server, and finishTurn decides whether to stop](docs/images/harness-loop.svg)
 
