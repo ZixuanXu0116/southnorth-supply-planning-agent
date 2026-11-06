@@ -1,0 +1,25 @@
+table: ops.decisions
+layer: ops
+source_system: ops daily job
+description: One row per decision purchasing recorded on a case, with the recommendation it was compared with and whether it followed it (from the case store's decision_recorded events), or demo data where real decisions are few. Written by snm-evals ops-daily; for people, never read by the agents.
+grain: One row per recorded decision.
+primary_key: [case_id, seq]
+domain: Operations
+subdomain: Operations/Decisions
+sensitivity: internal
+columns:
+  - {name: case_id, type: STRING, nullable: false, comment: "The case decided."}
+  - {name: seq, type: INT, nullable: false, comment: "Sequence number of the decision event in the case."}
+  - {name: source, type: STRING, nullable: false, comment: "app (the case store) or demo."}
+  - {name: decided_at, type: TIMESTAMP, nullable: false, comment: "When the decision was recorded (UTC)."}
+  - {name: decision_date, type: DATE, nullable: false, comment: "Day of the decision (UTC)."}
+  - {name: recommended, type: STRING, nullable: true, comment: "The option the decision was compared with (the planner's or the server's recommendation); NULL when nothing was recommended."}
+  - {name: chosen, type: STRING, nullable: false, comment: "The option purchasing chose."}
+  - {name: followed, type: BOOLEAN, nullable: true, comment: "Whether the choice is the recommendation; NULL when nothing was recommended."}
+  - {name: reason, type: STRING, nullable: true, comment: "Purchasing's one-line reason, required when it chose another option."}
+  - {name: loaded_at, type: TIMESTAMP, nullable: false, comment: "When the daily job wrote the row (UTC)."}
+tests:
+  unique: [[case_id, seq]]
+  accepted_values:
+    - {column: source, values: [app, eval, demo]}
+access: []

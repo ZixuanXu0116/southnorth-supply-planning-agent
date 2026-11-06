@@ -80,8 +80,21 @@ def test_the_tags_of_a_planner_and_an_extractor_run() -> None:
     assert wm.workflow_tags(planner_trace("r1", "C-1"), "eval", "b1") == {
         "agent": "planner", "task": "evaluate", "case_id": "C-1", "status": "written", "source": "eval",
         "batch": "b1", "prompt_version": "v6", "model": "anthropic/claude-sonnet-5-5", "run_id": "r1",
-        "cost_usd": "0.0200",
+        "cost_usd": "0.0200", "case_state_after": "-",
     }  # fmt: skip
+    events = planner_trace("r2", "C-2")
+    events.insert(
+        -1,
+        {
+            "seq": 9,
+            "ts": "2026-11-02T10:00:09.000Z",
+            "event": "tool",
+            "name": "propose_recommendation",
+            "id": "t2",
+            "output": '{"recorded":"recommendation_proposed","state_after":"recommended"}',
+        },
+    )
+    assert wm.workflow_tags(events, "eval", "b1")["case_state_after"] == "recommended"
     tags = wm.workflow_tags(extractor_trace("x1"), "app", "app-20261102T100000Z")
     assert (tags["agent"], tags["task"], tags["case_id"], tags["status"]) == (
         "extractor",

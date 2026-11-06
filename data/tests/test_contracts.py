@@ -17,7 +17,8 @@ def test_all_contracts_load(registry: ContractRegistry) -> None:
     assert len(registry) >= 30
     for contract in registry:
         # Curated views stay internal until the curated layer is complete; metric views expose them.
-        assert contract.access or contract.layer in {"eval", "curated"}, f"{contract.table} has no readers"
+        readable = contract.access or contract.layer in {"eval", "curated", "ops"}
+        assert readable, f"{contract.table} has no readers"
         assert contract.primary_key, f"{contract.table} has no primary key"
 
 

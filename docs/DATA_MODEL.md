@@ -65,7 +65,7 @@ One Unity Catalog catalog (`snm`, or the Free Edition default catalog with the s
    ┌────────────────────────▼─────────────────────────┐
    │ L4 SEMANTIC semantic (UC metric views)            │  governed KPIs + semantic metadata
    └──────────────────────────────────────────────────┘
-   side schemas:  ops (freshness, DQ results) · eval (hidden) · agent_audit
+   side schemas:  ops (workflow operations; freshness, DQ planned) · eval (hidden) · agent_audit
 ```
 
 ### 2.1 Layer contracts
@@ -78,7 +78,7 @@ One Unity Catalog catalog (`snm`, or the Free Edition default catalog with the s
 | L2 Restricted | `restricted` | Operator-identifiable labor facts | `fct_*`, `dim_*` | Delta tables | Role-dependent only |
 | L3 Marts | `marts` | Aggregates at declared grains for common questions and metric-view performance | `agg_<subject>_<grain>` | Delta tables | Read |
 | L4 Semantic | `semantic` | UC metric views with semantic metadata (display names, formats, synonyms, comments) | `mv_<subject>` | Metric views | Read (primary for KPI questions via `query_metric`) |
-| Ops | `ops` | `data_load_log` (freshness), `dq_results`, `pipeline_runs` | — | Delta tables | Read (freshness / known-issue tool) |
+| Ops | `ops` | Built: the workflow's operations for the operations dashboard (`docs/DEPLOYMENT.md`): agent runs, trace checks, decisions, confirmed documents, uptime checks, each row with `source` = app, eval, or demo. Planned: `data_load_log` (freshness), `dq_results`, `pipeline_runs` | `agent_runs`, `trace_checks`, `decisions`, `documents`, `uptime_checks` | Delta tables, written by the ops jobs | No access to the workflow's tables (hidden from the agents, like `eval`); the planned freshness tables, once built, are opened to the agents table by table as their known-issue tool |
 | Eval | `eval` | Gold answers, anomaly ground truth, generator manifest | — | Delta tables | **No access** (enforced by grants) |
 | Audit | `agent_audit` | Query audit log written by the tool server's service identity | — | Delta tables | No SQL access for the agent |
 

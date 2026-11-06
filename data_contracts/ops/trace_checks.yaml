@@ -1,0 +1,23 @@
+table: ops.trace_checks
+layer: ops
+source_system: ops daily job
+description: One row per planner run and check of its trace - the code checks of snm_evals.trace_checks, and the LLM judge (rubric v2) on a sample - with the outcome and its evidence. Written by snm-evals ops-daily; for people, never read by the agents.
+grain: One row per run and check.
+primary_key: [run_id, check_id]
+domain: Operations
+subdomain: Operations/Trace checks
+sensitivity: internal
+columns:
+  - {name: run_id, type: STRING, nullable: false, comment: "Agent run identifier."}
+  - {name: source, type: STRING, nullable: false, comment: "app, eval, or demo, as in ops.agent_runs."}
+  - {name: run_date, type: DATE, nullable: false, comment: "Day the run started (UTC)."}
+  - {name: check_id, type: STRING, nullable: false, comment: "The code check's number (1 to 7, 9), or judge_v2 for the LLM judge."}
+  - {name: check_name, type: STRING, nullable: false, comment: "What the check asks, in a few words."}
+  - {name: outcome, type: STRING, nullable: false, comment: "pass, fail, or na (does not apply) for a code check; sound, unsound, or unclear for the judge."}
+  - {name: detail, type: STRING, nullable: true, comment: "The evidence of a failure, or the judge's summary."}
+  - {name: checked_at, type: TIMESTAMP, nullable: false, comment: "When the check ran (UTC)."}
+tests:
+  unique: [[run_id, check_id]]
+  accepted_values:
+    - {column: outcome, values: [pass, fail, na, sound, unsound, unclear, error]}
+access: []

@@ -1,0 +1,24 @@
+table: ops.uptime_checks
+layer: ops
+source_system: uptime check job
+description: One row per uptime check of the Databricks App - its state, the age of its heartbeat, whether it was healthy, and whether the check started it. Written by the uptime check job (every 10 minutes while its schedule runs, paused by default).
+grain: One row per check.
+primary_key: [checked_at]
+domain: Operations
+subdomain: Operations/Uptime
+sensitivity: internal
+columns:
+  - {name: checked_at, type: TIMESTAMP, nullable: false, comment: "When the check ran (UTC)."}
+  - {name: check_date, type: DATE, nullable: false, comment: "Day of the check (UTC)."}
+  - {name: source, type: STRING, nullable: false, comment: "app (the uptime check job) or demo (generated example data)."}
+  - {name: app_state, type: STRING, nullable: true, comment: "The app's state as the workspace reports it (for example RUNNING, UNAVAILABLE)."}
+  - {name: compute_state, type: STRING, nullable: true, comment: "The app's compute state (for example ACTIVE, STOPPED)."}
+  - {name: heartbeat_age_s, type: DOUBLE, nullable: true, comment: "Seconds since the app last wrote heartbeat.json; NULL when there is none."}
+  - {name: healthy, type: BOOLEAN, nullable: false, comment: "Running, with a heartbeat younger than 3 minutes."}
+  - {name: action, type: STRING, nullable: false, comment: "none, started (the check started the stopped app), restarted (it redeployed a running app with no heartbeat), or start_failed."}
+  - {name: detail, type: STRING, nullable: true, comment: "What the check saw or the error of a failed start."}
+tests:
+  accepted_values:
+    - {column: action, values: [none, started, restarted, start_failed]}
+    - {column: source, values: [app, demo]}
+access: []

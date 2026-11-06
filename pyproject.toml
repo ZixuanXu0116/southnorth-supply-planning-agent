@@ -36,6 +36,8 @@ select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
 [tool.ruff.lint.per-file-ignores]
 # The supplier-document test set: offers as HTML and text literals.
 "evals/src/snm_evals/documents.py" = ["E501"]
+# The ops dashboard: its datasets' SQL and its layout, one widget per line.
+"deploy/databricks/ops_dashboard.py" = ["E501"]
 
 [tool.ruff.lint.flake8-bugbear]
 extend-immutable-calls = ["fastapi.File", "fastapi.Form"]

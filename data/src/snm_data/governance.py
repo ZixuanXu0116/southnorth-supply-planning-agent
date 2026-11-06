@@ -47,7 +47,7 @@ RESTRICTED_SENSITIVITIES = frozenset({"restricted", "pii"})
 # Columns with these sensitivities are readable only by roles with cost access.
 COMMERCIAL_SENSITIVITIES = frozenset({"commercial"})
 # Layers the agent must never see, not even by name (evaluation ground truth).
-HIDDEN_LAYERS = frozenset({"eval"})
+HIDDEN_LAYERS = frozenset({"eval", "ops"})  # evaluation answers; run records for people
 # Columns that identify a site; a multi-site table with one of them must declare a site_key.
 SITE_COLUMNS = frozenset({"werks", "bwkey", "lgnum", "vstel", "bukrs", "vkorg", "ekorg"})
 ENTITLEMENT = "databricks-sql-access"

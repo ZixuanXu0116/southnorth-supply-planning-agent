@@ -1,0 +1,38 @@
+table: ops.agent_runs
+layer: ops
+source_system: ops daily job
+description: One row per agent run of the replenishment workflow (planner tasks, extractor), from evaluation batches, the Databricks App, or demo data, with its outcome, latency, cost, tokens, refused writes, and whether it passed every code check of its trace. Written by snm-evals ops-daily; for people, never read by the agents.
+grain: One row per agent run.
+primary_key: [run_id]
+domain: Operations
+subdomain: Operations/Agent runs
+sensitivity: internal
+columns:
+  - {name: run_id, type: STRING, nullable: false, comment: "Agent run identifier, as in the run's trace."}
+  - {name: source, type: STRING, nullable: false, comment: "Where the run comes from: app (the Databricks App), eval (an evaluation batch), or demo (generated example data)."}
+  - {name: batch, type: STRING, nullable: true, comment: "Evaluation batch, or the app start (app-<UTC time>) whose runs folder holds the run."}
+  - {name: run_date, type: DATE, nullable: false, comment: "Day the run started (UTC)."}
+  - {name: started_at, type: TIMESTAMP, nullable: false, comment: "When the run started (UTC)."}
+  - {name: agent, type: STRING, nullable: false, comment: "planner or extractor."}
+  - {name: task, type: STRING, nullable: false, comment: "The planner's task (prepare, evaluate, handoff), or extract for the extractor."}
+  - {name: agent_task, type: STRING, nullable: false, comment: "Agent and task together, for the dashboard's filter (for example planner evaluate)."}
+  - {name: case_id, type: STRING, nullable: true, comment: "The case the run worked on; NULL for the extractor's evaluation documents."}
+  - {name: status, type: STRING, nullable: false, comment: "How the run ended: written, refused (two refused writes), budget_exhausted, error, no_write, extracted, or unfinished."}
+  - {name: error_place, type: STRING, nullable: true, comment: "For a run that ended in error: model_api, tool_server, or harness."}
+  - {name: latency_s, type: DOUBLE, nullable: true, comment: "Wall-clock seconds of the run."}
+  - {name: cost_usd, type: DOUBLE, nullable: false, comment: "Model cost of the run in USD."}
+  - {name: prompt_tokens, type: BIGINT, nullable: false, comment: "Prompt tokens of the run's model calls: uncached input, cache reads, and cache writes."}
+  - {name: cache_read_tokens, type: BIGINT, nullable: false, comment: "Prompt tokens read from the prompt cache."}
+  - {name: write_attempts, type: INT, nullable: false, comment: "Calls to a write tool, accepted or refused."}
+  - {name: refused_writes, type: INT, nullable: false, comment: "Write calls refused by the harness or the case server."}
+  - {name: checks_passed, type: BOOLEAN, nullable: true, comment: "Whether the run passed every code check that applies to it (ops.trace_checks); NULL for the extractor."}
+  - {name: case_state_after, type: STRING, nullable: true, comment: "The case's state after the run's accepted write (a run ends one task; the case goes on)."}
+  - {name: model, type: STRING, nullable: true, comment: "Model of the run (provider/model id)."}
+  - {name: prompt_version, type: STRING, nullable: true, comment: "Version of the agent's prompt."}
+  - {name: loaded_at, type: TIMESTAMP, nullable: false, comment: "When the daily job wrote the row (UTC)."}
+tests:
+  unique: [[run_id]]
+  accepted_values:
+    - {column: source, values: [app, eval, demo]}
+    - {column: agent, values: [planner, extractor]}
+access: []

@@ -40,6 +40,14 @@ describe("trace soundness judge", () => {
 		]);
 	});
 
+	it("shows the write's text whole for rubric v2, which grades it", () => {
+		const long = "x".repeat(3_000);
+		const withText = trace.replace('{"recommended":"P-1"}', JSON.stringify({ recommended: "P-1", rationale_text: long }));
+		expect(compactTrace(withText).lines[2]).toContain("more characters]");
+		expect(compactTrace(withText, 8_000).lines[2]).toContain(long);
+		expect(compactTrace(withText, 8_000).lines[2]).not.toContain("more characters]");
+	});
+
 	it("returns the judge's recorded verdict", async () => {
 		const path = join(mkdtempSync(join(tmpdir(), "judge-")), "trace.jsonl");
 		writeFileSync(path, trace);
@@ -63,5 +71,15 @@ describe("trace soundness judge", () => {
 		});
 		expect(result.judgment).toEqual(judgment);
 		expect(seen).toContain("Task: evaluate for case C-1");
+		expect(result.prompt.version).toBe("v1");
+
+		faux.setResponses([fauxAssistantMessage([fauxToolCall("record_judgment", judgment)], { stopReason: "toolUse" })]);
+		const second = await judgeTrace(path, {
+			model: { provider: "faux", modelId: "faux", effort: "low" },
+			apiKey: "unused",
+			resolvedModel: faux.getModel(),
+			rubric: "v2",
+		});
+		expect(second.prompt.version).toBe("v2");
 	});
 });

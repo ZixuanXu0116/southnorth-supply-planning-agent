@@ -1,0 +1,24 @@
+table: ops.documents
+layer: ops
+source_system: ops daily job
+description: One row per supplier document purchasing confirmed from an extractor's draft, with the fields purchasing changed (from the case store's proposal_recorded events), or demo data where real documents are few. A document confirmed with no field changed counts for the extractor's accuracy. Written by snm-evals ops-daily; for people, never read by the agents.
+grain: One row per confirmed supplier document.
+primary_key: [case_id, seq]
+domain: Operations
+subdomain: Operations/Documents
+sensitivity: internal
+columns:
+  - {name: case_id, type: STRING, nullable: false, comment: "The case of the document."}
+  - {name: seq, type: INT, nullable: false, comment: "Sequence number of the confirmation event in the case."}
+  - {name: source, type: STRING, nullable: false, comment: "app (the case store) or demo."}
+  - {name: confirmed_at, type: TIMESTAMP, nullable: false, comment: "When purchasing confirmed the draft (UTC)."}
+  - {name: confirm_date, type: DATE, nullable: false, comment: "Day of the confirmation (UTC)."}
+  - {name: method, type: STRING, nullable: true, comment: "How the draft was made: the extractor's model, or rules for code-only reading."}
+  - {name: fields_changed, type: INT, nullable: false, comment: "How many fields purchasing changed before confirming."}
+  - {name: changed_fields, type: STRING, nullable: true, comment: "The changed fields, comma-separated (option.field)."}
+  - {name: loaded_at, type: TIMESTAMP, nullable: false, comment: "When the daily job wrote the row (UTC)."}
+tests:
+  unique: [[case_id, seq]]
+  accepted_values:
+    - {column: source, values: [app, eval, demo]}
+access: []

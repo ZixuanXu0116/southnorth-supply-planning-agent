@@ -1,8 +1,10 @@
 /**
  * Trace soundness (evals: `snm-evals trace-judge`): an LLM judge reads one planner run's trace, compacted to its
- * steps (each tool call with its arguments, each result in brief, how the run ended), and grades the process
- * against the steps of a sound run (`prompts/trace-judge/v1.md`). Runs are sampled; the judge has no tools but
- * the one that records its verdict.
+ * steps (each tool call with its arguments, each result in brief, how the run ended), and grades it against a
+ * rubric: v1 (`prompts/trace-judge/v1.md`) checks every step of a sound run; v2 (`prompts/trace-judge/v2.md`)
+ * only what needs judgment (the real reason, omissions, comparisons, an actionable note), since the structural
+ * steps are checked in code (`snm_evals.trace_checks`). The judge has no tools but the one that records its
+ * verdict.
  */
 import { readFileSync } from "node:fs";
 import { Agent, type AgentTool, type StreamFn } from "@earendil-works/pi-agent-core";
@@ -15,7 +17,12 @@ import { renderPrompt } from "./prompts.js";
 import type { UsageTotals } from "./runner.js";
 
 export const TRACE_JUDGE_PROMPT_VERSION = "v1";
+export const TRACE_JUDGE_PROMPT_VERSIONS = ["v1", "v2"] as const;
+export type TraceJudgeRubric = (typeof TRACE_JUDGE_PROMPT_VERSIONS)[number];
 const MAX_ARGUMENT_CHARS = 1_500;
+/** Rubric v2 grades the text of the write, so the write's arguments are shown whole. */
+const MAX_WRITE_ARGUMENT_CHARS = 8_000;
+const WRITE_TOOLS = new Set(["propose_recommendation", "draft_supplier_request", "prepare_transfer", "draft_handoff", "add_note"]);
 const MAX_RESULT_CHARS = 4_000; // what the trace keeps of a result
 
 export const JudgmentSchema = Type.Object(
@@ -48,7 +55,7 @@ function brief(value: unknown, limit: number): string {
 }
 
 /** A run's trace as the judge reads it: the task, then one line per call and result, then the end. */
-export function compactTrace(text: string): { task: string; caseId: string; lines: string[] } {
+export function compactTrace(text: string, writeLimit = MAX_ARGUMENT_CHARS): { task: string; caseId: string; lines: string[] } {
 	const entries = text
 		.split("\n")
 		.filter((line) => line.trim())
@@ -62,7 +69,7 @@ export function compactTrace(text: string): { task: string; caseId: string; line
 			const calls = (entry.tool_calls as { name: string; arguments: unknown }[] | undefined) ?? [];
 			const said = typeof entry.text === "string" && entry.text.trim() ? ` says: ${brief(entry.text, 300)}` : "";
 			lines.push(
-				`turn ${entry.turn}: ${calls.length ? calls.map((call) => `${call.name}(${brief(call.arguments, MAX_ARGUMENT_CHARS)})`).join("; ") : "no call"}${said}`,
+				`turn ${entry.turn}: ${calls.length ? calls.map((call) => `${call.name}(${brief(call.arguments, WRITE_TOOLS.has(call.name) ? writeLimit : MAX_ARGUMENT_CHARS)})`).join("; ") : "no call"}${said}`,
 			);
 		} else if (entry.event === "tool") {
 			lines.push(`  result of ${entry.name}${entry.is_error ? " (refused or failed)" : ""}: ${brief(entry.output, MAX_RESULT_CHARS)}`);
@@ -83,10 +90,11 @@ export interface TraceJudgment {
 
 export async function judgeTrace(
 	tracePath: string,
-	options: { model: ModelRole; apiKey: string; streamFn?: StreamFn; resolvedModel?: Model<Api> },
+	options: { model: ModelRole; apiKey: string; streamFn?: StreamFn; resolvedModel?: Model<Api>; rubric?: TraceJudgeRubric },
 ): Promise<TraceJudgment> {
-	const prompt = renderPrompt("trace-judge", TRACE_JUDGE_PROMPT_VERSION, {});
-	const trace = compactTrace(readFileSync(tracePath, "utf8"));
+	const rubric = options.rubric ?? TRACE_JUDGE_PROMPT_VERSION;
+	const prompt = renderPrompt("trace-judge", rubric, {});
+	const trace = compactTrace(readFileSync(tracePath, "utf8"), rubric === "v2" ? MAX_WRITE_ARGUMENT_CHARS : MAX_ARGUMENT_CHARS);
 	const usage: UsageTotals = { input: 0, output: 0, cache_read: 0, cache_write: 0, cost_usd: 0 };
 	const model = `${options.model.provider}/${options.model.modelId}`;
 	let judgment: Judgment | undefined;

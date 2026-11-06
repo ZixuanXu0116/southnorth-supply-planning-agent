@@ -87,6 +87,7 @@ def _mirrored(runs_dir: Path, volume: str, planner, started: str):
     planner run."""
     from snm_data.databricks import DatabricksSettings, workspace_client
 
+    from .heartbeat import Heartbeat
     from .mirror import RunsMirror
 
     client = []
@@ -99,6 +100,9 @@ def _mirrored(runs_dir: Path, volume: str, planner, started: str):
     mirror = RunsMirror(runs_dir, f"{volume.rstrip('/')}/{started}", files).start()
     atexit.register(mirror.stop)
     print(f"runs mirrored to {mirror.target}")
+    # The uptime check reads its age (deploy/databricks/jobs/uptime_check.py).
+    heartbeat = Heartbeat(files, f"{volume.rstrip('/')}/heartbeat.json", started).start()
+    atexit.register(heartbeat.stop)
 
     def run(*arguments):
         try:

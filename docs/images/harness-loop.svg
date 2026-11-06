@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 816" width="760" height="816" role="img" aria-labelledby="t2 d2">
   <title id="t2">One planner task, turn by turn</title>
-  <desc id="d2">The harness starts the task and repeats turns: it sends the context to the model, the model replies, every tool call is checked before it runs, reads run freely and the task's one write is checked by the case server, the result is appended, and finishTurn decides whether to stop. A refused write comes back as an error with a hint.</desc>
+  <desc id="d2">The harness starts the task and repeats turns: it sends the context to the model, the model replies, every tool call is checked before it runs, reads run freely and the task's one write is checked by the harness (every figure traced to an evaluation) and then by the case server, the result is appended, and finishTurn decides whether to stop. A refused write comes back as an error with a hint; after a second refusal the task stops and leaves a note for purchasing.</desc>
   <style>
     svg { --bg: #f7f8fa; --fg: #1d2430; --muted: #5b6474; --panel: #ffffff; --line: #8a93a3;
           --frame: #b9c0cc; --accent: #0b6e4f; --warn: #b4530a; }
@@ -81,7 +81,7 @@
   <text class="detail" x="200" y="449" text-anchor="middle">case · prices · ranking · KB</text>
   <rect class="box" x="450" y="410" width="220" height="50" rx="5"/>
   <text class="head" x="560" y="431" text-anchor="middle">Write, one per task</text>
-  <text class="detail" x="560" y="449" text-anchor="middle">checked by the case server</text>
+  <text class="detail" x="560" y="449" text-anchor="middle">figure check, then case server</text>
   <line class="edge" x1="560" y1="460" x2="560" y2="474" marker-end="url(#b)"/>
 
   <!-- accepted? -->
@@ -105,7 +105,7 @@
   <text class="t" x="380" y="650" text-anchor="middle"><tspan class="num">5</tspan>  Result appended to the transcript</text>
   <line class="edge" x1="380" y1="664" x2="380" y2="680" marker-end="url(#b)"/>
   <rect class="box" x="200" y="682" width="360" height="36" rx="5"/>
-  <text class="t" x="380" y="704" text-anchor="middle"><tspan class="num">6</tspan>  finishTurn: written or over budget?</text>
+  <text class="t" x="380" y="704" text-anchor="middle"><tspan class="num">6</tspan>  finishTurn: written, refused twice, or over budget?</text>
   <path class="loop" d="M200,700 L70,700 L70,106 L196,106" marker-end="url(#b-accent)"/>
   <text class="accent" x="62" y="400" text-anchor="middle" transform="rotate(-90 62 400)">no: next turn</text>
 
@@ -115,7 +115,7 @@
 
   <!-- 7 -->
   <rect class="box" x="200" y="762" width="360" height="36" rx="5"/>
-  <text class="t" x="380" y="784" text-anchor="middle"><tspan class="num">7</tspan>  Wrap up: trace and result saved</text>
+  <text class="t" x="380" y="784" text-anchor="middle"><tspan class="num">7</tspan>  Wrap up: trace saved; a note if refused twice</text>
   <rect class="side" x="580" y="764" width="150" height="34" rx="5"/>
   <text class="detail" x="655" y="785" text-anchor="middle">300 s wall clock → abort</text>
 </svg>

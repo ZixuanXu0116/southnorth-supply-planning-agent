@@ -13,6 +13,8 @@ SCHEMA_COMMENTS = {
     "semantic": "Governed metric views (KPI definitions) queried by the agent through query_metric.",
     "cases": "Replenishment case store: append-only events written by the case server, plus the derived "
     "current state; the only writable schema of the system.",
+    "ops": "The workflow's operations: agent runs, trace checks, decisions, documents, and uptime checks, "
+    "written by the ops jobs for the operations dashboard; never read by the agents.",
 }
 
 

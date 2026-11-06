@@ -59,7 +59,8 @@ Technical details: [`docs/TECHNICAL.md`](docs/TECHNICAL.md) · decisions: [`docs
 
   `regret = cost of the chosen option − cost of the hindsight-cheapest option`
 
-- **Trace soundness.** Every run leaves a trace of its turns and tool calls. A sample of traces is graded by an LLM judge against the steps a sound solution takes (read the case before writing, rank before recommending, cite the server's evaluation ids, end with one write on its own), to catch a right answer reached the wrong way (`snm-evals trace-judge`).
+- **Trace soundness.** Every run leaves a trace of its turns and tool calls, readable step by step in MLflow. Eight rules of a sound run are checked in code on every trace (read the case before writing, rank before recommending, cite the server's evaluation ids, one write at the end and alone, no identical retry, the write the case calls for, every figure traced, a clean end); an LLM judge grades only what needs judgment (is the stated reason the real one, is anything that matters left out, are the comparisons right). Both are tested on planted defects: the code checks caught 57 of 57 structural ones, the judge 12 of 12 false comparisons, with the same verdict twice on 12 of 12 sound runs (`snm-evals trace-checks`, `snm-evals trace-judge --rubric v2`; [report](evals/reports/trace-checks-v2.md)).
+- **Operations.** A daily job writes each run's outcome, latency, cost, refused writes, and trace checks, with purchasing's decisions and confirmed documents, to Databricks tables; a dashboard (shown on demo data) has cards for the acceptance rate, extractor accuracy, trace-check pass rate, refusal and error rates, latency and cost (p50, p95), cost per case, and uptime, with trends below. An uptime check, switched on for demo days, keeps the app up.
 - **Supplier documents (field accuracy).** Documents with known answers (PDFs, screenshots, scans, the supplier's own Excel): `field accuracy = fields read correctly / fields in the document`.
 
 ## Try it locally
@@ -76,9 +77,9 @@ uv run snm-web serve                        # open http://127.0.0.1:8000 and cho
 
 The agents also need Node 22 (`npm ci && npm run build -w harness`) and an Anthropic key (`SNM_ANTHROPIC_API_KEY`, `SNM_MODEL_MAIN`). Databricks App deployment: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
-## Status (2026-11-02)
+## Status (2026-11-05)
 
-- **Built:** engine, case store, purchasing and supplier pages; the planner agent with a verifier sub-agent; supplier replies read from PDFs, screenshots and Excel; the data agent; governance; evaluations (regret, trace soundness, field accuracy); each MCP server in its own process; deployed as a Databricks App.
+- **Built:** engine, case store, purchasing and supplier pages; the planner agent with a verifier sub-agent; supplier replies read from PDFs, screenshots and Excel; the data agent; governance; evaluations (regret, trace soundness, field accuracy); every workflow run in MLflow; an operations dashboard and an uptime check; each MCP server in its own process; deployed as a Databricks App.
 - **In progress:** the intake agent (its case-server side is built); an improvement loop that turns failures into reviewed fixes.
 - **Planned:** questions inside a case thread for purchasing and suppliers; supplier replies by email.
 

@@ -69,7 +69,24 @@ def workflow_tags(events: list[dict[str, Any]], source: str, batch: str) -> dict
     document = start.get("document")
     if isinstance(document, dict) and document.get("file_name"):
         tags["document"] = str(document["file_name"])
+    tags["case_state_after"] = case_state_after(events)
     return tags
+
+
+def case_state_after(events: list[dict[str, Any]]) -> str:
+    """The case's state after the run's accepted write (``prepared``, ``recommended``, ...), from the write's
+    result; ``-`` when the run wrote nothing that moved the case. A run ends one task; the case goes on."""
+    for event in reversed(events):
+        if event.get("event") != "tool" or event.get("is_error"):
+            continue
+        output = event.get("output")
+        try:
+            result = json.loads(output) if isinstance(output, str) else output
+        except json.JSONDecodeError:
+            continue
+        if isinstance(result, dict) and result.get("state_after"):
+            return str(result["state_after"])
+    return "-"
 
 
 def trace_files(batch_dir: Path) -> list[Path]:

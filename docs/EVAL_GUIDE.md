@@ -100,6 +100,9 @@ uv run snm-evals score <batch>                                  # rescore after 
 uv run snm-evals mlflow-upload <batch>                          # when the upload at the end of a run failed
 uv run snm-evals mlflow-upload-workflow <batch> | --all         # planner and extractor batches (idempotent)
 uv run snm-evals mlflow-upload-workflow --all --count           # local trace files against MLflow, per batch
+uv run snm-evals trace-checks --batch <batch>                  # the code checks of planner traces
+uv run snm-evals trace-checks --planted                        # what the checks catch on planted defects
+uv run snm-evals trace-judge --rubric v2 --planted --batch <b> # the judge on planted false comparisons, twice on sound runs
 uv run snm-data replay && uv run snm-data oracle                # engine gates (offline, on out/small)
 uv run snm-evals planner --planning out/planning/<as-of> --report --batch planner-prepare-<tag>
 ```

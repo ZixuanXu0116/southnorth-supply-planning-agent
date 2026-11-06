@@ -149,11 +149,30 @@ def main(argv: list[str] | None = None) -> None:
     judge = commands.add_parser(
         "trace-judge", help="trace soundness: a sample of planner runs graded by a judge"
     )
-    judge.add_argument("--batches", nargs="+", required=True, help="batch directories under runs/evals/")
+    judge.add_argument("--batches", nargs="+", help="batch directories under runs/evals/")
     judge.add_argument("--sample", type=int, default=12)
     judge.add_argument("--seed", type=int, default=1)
     judge.add_argument("--batch", required=True, help="output directory under runs/evals/")
     judge.add_argument("--report", action="store_true", help="write evals/reports/<batch>.md")
+    judge.add_argument("--rubric", choices=["v1", "v2"], default="v1")
+    judge.add_argument(
+        "--planted", action="store_true", help="v2: the planted false comparisons and the repeat test"
+    )
+    ops_daily = commands.add_parser("ops-daily", help="new rows of the snm.ops tables (the ops dashboard)")
+    ops_daily.add_argument(
+        "--evals", action="store_true", help="also the evaluation batches under runs/evals/"
+    )
+    ops_daily.add_argument(
+        "--demo", action="store_true", help="write the demo set again (what the dashboard shows)"
+    )
+    ops_daily.add_argument(
+        "--judge-sample", type=int, default=0, help="the LLM judge (rubric v2) on N new runs"
+    )
+    checks = commands.add_parser("trace-checks", help="the code checks of planner traces")
+    checks.add_argument("--batch", action="append", default=[], help="batch directory under runs/evals/")
+    checks.add_argument(
+        "--planted", action="store_true", help="plant defects and report what the checks catch"
+    )
     docs = commands.add_parser("documents", help="supplier documents: code-only vs. model extractors")
     docs.add_argument("--batch", required=True)
     docs.add_argument("--arms", default="rules,claude-haiku-5-5,claude-sonnet-5-5,claude-opus-5-5")
@@ -166,12 +185,30 @@ def main(argv: list[str] | None = None) -> None:
     if args.command == "improve":
         _improve(args)
         return
+    if args.command == "trace-checks":
+        _trace_checks(args)
+        return
+    if args.command == "ops-daily":
+        _ops_daily(args)
+        return
+    if args.command == "trace-judge" and args.planted:
+        from .planted import plant
+        from .trace_judge import judge_v2_summary, run_judge_v2_tests
+
+        planted = plant(RUNS_ROOT, RUNS_ROOT / PLANTED_DIR)
+        rows = run_judge_v2_tests(planted, RUNS_ROOT / args.batch)
+        print(json.dumps(judge_v2_summary(rows), indent=2, default=str))
+        return
     if args.command == "trace-judge":
         from .trace_judge import render as render_judgments
         from .trace_judge import run_trace_judge
 
-        rows = run_trace_judge(args.batches, args.sample, args.seed, RUNS_ROOT / args.batch)
-        report = render_judgments(rows, args.batches, args.seed)
+        if not args.batches:
+            raise SystemExit("pass --batches, or --planted")
+        rows = run_trace_judge(
+            args.batches, args.sample, args.seed, RUNS_ROOT / args.batch, rubric=args.rubric
+        )
+        report = render_judgments(rows, args.batches, args.seed, args.rubric)
         print(report)
         if args.report:
             (EVALS_ROOT / "reports" / f"{args.batch}.md").write_text(report, encoding="utf-8")
@@ -316,10 +353,66 @@ def main(argv: list[str] | None = None) -> None:
             upload_batch(RUNS_ROOT / name, experiment, replace=args.replace)
 
 
+PLANTED_DIR = "trace-checks-v2-planted"
+
+
+def _ops_daily(args: argparse.Namespace) -> None:
+    import tempfile
+
+    from snm_data.databricks import sql_connection, workspace_client
+
+    from .ops import SqlStore, daily, replace_demo
+    from .trace_judge import judge as judge_trace
+
+    settings = DatabricksSettings.from_env()
+
+    def judge(events: list[dict]) -> tuple[str, str]:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "trace.jsonl"
+            path.write_text("".join(json.dumps(e) + "\n" for e in events), encoding="utf-8")
+            result = judge_trace(path, "v2")
+        judgment = result.get("judgment") or {}
+        return judgment.get("verdict", "error"), judgment.get("summary", result.get("error", ""))
+
+    with sql_connection(settings) as connection:
+        store = SqlStore(connection, settings.catalog)
+        daily(
+            store,
+            workspace_client(settings).files,
+            evals_root=RUNS_ROOT if args.evals else None,
+            judge=judge if args.judge_sample else None,
+            judge_sample=args.judge_sample,
+        )
+        if args.demo:
+            from datetime import UTC, datetime
+
+            now = datetime.now(UTC).replace(tzinfo=None, microsecond=0)
+            replace_demo(store, now.date(), now)
+
+
+def _trace_checks(args: argparse.Namespace) -> None:
+    from .planted import catch_rates, plant
+    from .trace_checks import check_batch, render
+
+    for name in args.batch:
+        print(render(check_batch(RUNS_ROOT / name, RUNS_ROOT), name))
+    if args.planted:
+        rates = catch_rates(plant(RUNS_ROOT, RUNS_ROOT / PLANTED_DIR))
+        print("| Planted defect | Copies | Caught by its check | Checks that failed |\n|---|---|---|---|")
+        for kind, rate in rates.items():
+            fired = ", ".join(f"{check}: {count}" for check, count in rate["fired"].items()) or "none"
+            print(f"| {kind} | {rate['copies']} | {rate['caught']} (check {rate['check']}) | {fired} |")
+    if not args.batch and not args.planted:
+        raise SystemExit("pass --batch, or --planted")
+
+
 def workflow_batches() -> list[Path]:
-    """The workflow's evaluation batches: those without the data agent's scores (``scores.json``)."""
+    """The workflow's evaluation batches: those without the data agent's scores (``scores.json``), planted
+    copies left out."""
     return sorted(
-        path for path in RUNS_ROOT.iterdir() if path.is_dir() and not (path / "scores.json").is_file()
+        path
+        for path in RUNS_ROOT.iterdir()
+        if path.is_dir() and not (path / "scores.json").is_file() and not (path / "PLANTED").exists()
     )
 
 

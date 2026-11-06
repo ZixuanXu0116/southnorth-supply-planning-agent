@@ -120,3 +120,20 @@ MLflow (2026-11-02): each agent run of the app (planner, extractor) is uploaded 
 Both workflow experiments keep their trace data under `/Volumes/snm/cases/runs/mlflow-traces/`. Filter a workflow experiment's traces by `agent`, `task`, `case_id`, `status`, `source`, `batch`, `prompt_version`, or `model`.
 
 Not yet in the app: the question page and the data agent (its tool server needs a role's service principal of its own).
+
+## Operations dashboard and uptime check
+
+The workflow's daily numbers live in the schema `snm.ops` (contracts in `data_contracts/ops/`; the agents never read it): `agent_runs` (one row per run: outcome, latency, cost, tokens, refused writes, whether its trace passed every code check, the case's state after it), `trace_checks` (one row per run and check, and the LLM judge's verdict where one was made), `decisions` (each decision with the recommendation it was compared with and whether it followed it), `documents` (each confirmed supplier document with the fields purchasing changed), and `uptime_checks`. Every row carries `source`: `app`, `eval`, or `demo` (a generated example set for every table, four weeks long).
+
+```bash
+uv run python deploy/databricks/ops_deploy.py tables       # schema and tables
+uv run snm-evals ops-daily --evals --demo                  # load the real rows, and write the demo set again
+uv run python deploy/databricks/ops_deploy.py bundle       # upload the job scripts and their modules
+uv run python deploy/databricks/ops_deploy.py jobs         # snm-ops-daily (daily, 10:17 UTC) and snm-uptime-check (paused)
+uv run python deploy/databricks/ops_deploy.py dashboard    # "Replenishment workflow operations", published
+uv run python deploy/databricks/ops_deploy.py recount      # the cards' SQL against snm_evals.ops.cards, same rows
+```
+
+- **The daily job** (`snm-ops-daily`, serverless, as the owner) adds the app's new agent runs from the runs volume, their code checks, and the case store's new decisions and documents; a second run adds nothing. It checks in code only: the LLM judge needs the harness and the Anthropic key, which stay out of Databricks jobs, so `snm-evals ops-daily --judge-sample N` judges N new runs where the harness runs. Evaluation batches are loaded with `--evals` from the machine that ran them.
+- **The dashboard** shows the demo rows only: it demonstrates what is measured, and the real rows stay in the tables. It has filters for the date range, the agent and task, and the case; the cards on top follow them: acceptance rate, extractor accuracy, trace-check pass rate, refusal rate, error rate, uptime, latency and cost (p50 and p95), total cost, cost per case. Below: the rates, latency, and cost by day, the distributions of latency and cost, and the cost of each case. The definitions are in `snm_evals.ops.cards`, and `recount` checks that the dashboard's SQL gives the same values.
+- **The uptime check** (`snm-uptime-check`, every 10 minutes, **paused** by default) reads the app's state and the age of `heartbeat.json`, which the app writes to the runs volume every minute, writes one row to `snm.ops.uptime_checks`, and starts the app when it is stopped (or redeploys it when it runs with no heartbeat for 3 minutes). Turn it on for a demo day and off after: `uv run python deploy/databricks/ops_deploy.py uptime on|off`. While it runs, the app stays up.
