@@ -81,7 +81,7 @@ The agents also need Node 22 (`npm ci && npm run build -w harness`) and an Anthr
 
 - **Built:** engine, case store, purchasing and supplier pages; the planner agent with a verifier sub-agent; supplier replies read from PDFs, screenshots and Excel; the data agent; governance; evaluations (regret, trace soundness, field accuracy); every workflow run in MLflow; an operations dashboard and an uptime check; each MCP server in its own process; deployed as a Databricks App.
 - **In progress:** the intake agent (its case-server side is built); an improvement loop that turns failures into reviewed fixes.
-- **Planned:** questions inside a case thread for purchasing and suppliers; supplier replies by email.
+- **Planned:** questions inside a case thread for purchasing and suppliers.
 
 ## How this was built
 
